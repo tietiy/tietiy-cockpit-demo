@@ -42,6 +42,27 @@ const candle = chart.addCandlestickSeries({
   upColor:'#3fb27f', downColor:'#e2574c',
   borderUpColor:'#3fb27f', borderDownColor:'#e2574c',
   wickUpColor:'#3fb27f', wickDownColor:'#e2574c',
+  // Custom autoscale provider — restrict y-axis to the VISIBLE candle range,
+  // ignoring price-line chips. Default LWC behaviour expands the y-axis to
+  // include ALL price-lines, which on a narrow viewport (phone) gives a
+  // 800-1800 range when candles are 1300-1500. Bound to visible bars + 5/10%
+  // margins for breathing room. (2026-06-03)
+  autoscaleInfoProvider: (_originalDefault) => {
+    if (!currentBars || !currentBars.length) return null;
+    // Use the same window the time-scale defaults to (last N bars)
+    const N = (typeof VISIBLE_BARS_DEFAULT === 'number') ? VISIBLE_BARS_DEFAULT : 90;
+    const visible = currentBars.slice(-N);
+    let lo =  Infinity, hi = -Infinity;
+    for (const b of visible) {
+      if (b.low  < lo) lo = b.low;
+      if (b.high > hi) hi = b.high;
+    }
+    if (!isFinite(lo) || !isFinite(hi) || lo >= hi) return null;
+    return {
+      priceRange: { minValue: lo, maxValue: hi },
+      margins:    { above: 0.06, below: 0.14 },   // bottom margin makes room for volume pane
+    };
+  },
 });
 
 const volume = chart.addHistogramSeries({ priceFormat:{ type:'volume' }, priceScaleId:'' });

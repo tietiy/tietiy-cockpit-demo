@@ -602,6 +602,23 @@ body{
   .fmc-anchors { flex-direction: column; gap: 3px; }
 }
 
+/* Hide OHLC crosshair overlay on phone — wastes vertical space when candles are tiny */
+@media (max-width: 640px) {
+  #legend { display: none !important; }
+  /* Compact period info row */
+  .symhead {
+    padding: 4px 8px;
+    font-size: 11px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .symhead .symhead-stat-label,
+  .symhead .symhead-vol,
+  .symhead .symhead-bars {
+    font-size: 10px;
+  }
+}
+
 /* Very narrow (Fold outer narrow side) — guard against unreadable widths */
 @media (max-width: 380px) {
   .state-banner {
