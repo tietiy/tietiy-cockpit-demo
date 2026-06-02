@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TIE TIY — Cockpit Chart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="vendor/lightweight-charts-4.1.3.standalone.production.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="wordmark">TIE TIY<span class="dot">.</span></div>
+    <div class="search-wrap">
+      <input id="search" class="search-input" type="text" placeholder="Search universe…" autocomplete="off" spellcheck="false">
+      <div id="dropdown" class="dropdown"></div>
+    </div>
+    <div id="status" class="status">
+      <span class="dotled"></span><span id="status-text">no symbol</span>
+    </div>
+  </div>
+
+  <div id="symhead" class="symhead">
+    <span class="empty">Select a symbol to load its chart</span>
+  </div>
+
+  <div class="controls">
+    <details class="dd-menu" id="dd-layers">
+      <summary>Layers ▾</summary>
+      <div class="dd-body">
+        <div class="toggle on" id="t-sma50"><span class="sw"></span><span class="lbl sma50-swatch">SMA 50</span></div>
+        <div class="toggle"    id="t-sma200" title="Default OFF — Aproova-style: one MA at default. Toggle ON for the long-term trend filter."><span class="sw"></span><span class="lbl sma200-swatch">SMA 200</span></div>
+        <div class="toggle on" id="t-vol"><span class="sw"></span><span class="lbl">Volume</span></div>
+        <div class="dd-divider"></div>
+        <div class="toggle"    id="t-pivots"   title="Gold lookback pivot arrows (FOCUS MODE: off — re-enable after S/R locks)"><span class="sw"></span><span class="lbl pivot-swatch">Lookback arrows</span></div>
+        <div class="toggle"    id="t-labels"   title="HH / HL / LH / LL text labels (FOCUS MODE: off)"><span class="sw"></span><span class="lbl label-swatch">Structure labels</span></div>
+        <div class="toggle on" id="t-events"   title="BOS + CHoCH event markers on candles. FOCUS MODE: on."><span class="sw"></span><span class="lbl event-swatch">BOS / CHoCH</span></div>
+        <div class="toggle"    id="t-catalyst" title="Gap / expansion + volume catalyst bars (P3-1 catalyst_marker) — DRILL-IN tool, toggle on when looking for catalyst confluence"><span class="sw"></span><span class="lbl catalyst-swatch">Catalysts</span></div>
+        <div class="toggle on" id="t-sr-zones"  title="S/R ZONES (current_actionable + strong_historical) — bracketed band rendering (top + bottom line). FOCUS MODE on."><span class="sw"></span><span class="lbl sr-swatch">S/R zones</span></div>
+        <div class="toggle on" id="t-trendlines" title="Diagonal trendlines (P3-3) — HTF + Internal + Tactical trend lines"><span class="sw"></span><span class="lbl trendline-swatch">Trendlines</span></div>
+        <div class="toggle on" id="t-fibs"       title="Fibonacci retracement + extension (P3-4) — current swing in gold, prior in muted blue (truncated). FOCUS MODE: on."><span class="sw"></span><span class="lbl fib-swatch">Fibs</span></div>
+        <div class="dd-divider"></div>
+        <div class="toggle"    id="t-zigzag-major" title="Zigzag major (5%) up-leg + down-leg lines"><span class="sw"></span><span class="lbl">Zigzag 5%</span></div>
+        <div class="toggle"    id="t-zigzag-minor" title="Zigzag minor (2%) backdrop polyline"><span class="sw"></span><span class="lbl">Zigzag 2%</span></div>
+      </div>
+    </details>
+    <details class="dd-menu" id="dd-producers">
+      <summary>Producers ▾</summary>
+      <div class="dd-body wide" id="dd-producers-body">
+        <div class="sp-dim">load a symbol to see producer output</div>
+      </div>
+    </details>
+    <span class="impctl" title="display-only swing-size threshold — filters which pivots are drawn (lower = more detail, higher = only biggest swings).">
+      <span class="impctl-label">swing ≥</span>
+      <input type="range" id="importance-min" min="0" max="100" step="1" value="10" class="impslider">
+      <span id="importance-value" class="impvalue">10</span>
+    </span>
+    <span class="present-hint" title="Press H to toggle present-mode (hide all P3-1 annotations for a fresh-eye read)">
+      <kbd>H</kbd> present
+    </span>
+    <span style="margin-left:auto; color:var(--dimmer)">PIT date:</span>
+    <select id="pit-date" class="date-select"><option>(loading…)</option></select>
+  </div>
+
+  <div class="main-split">
+    <div class="chart-and-bottom">
+    <div class="chart-area">
+      <div id="state-banner" class="state-banner" style="display:none"></div>
+      <div id="chart"></div>
+      <div id="trend-badge" class="trend-badge" style="display:none">
+        <span class="tb-trend">—</span>
+        <span class="tb-days">— d</span>
+      </div>
+      <div id="legend" class="legend" style="display:none"></div>
+      <div id="settling-zone-note" class="settling-note" style="display:none">
+        last 10 bars: pivots not yet confirmable (lookback_n10)
+      </div>
+      <div id="placeholder" class="placeholder">
+        <div class="big">TIE TIY</div>
+        <div class="sub">type a ticker above — RELIANCE.NS, TCS.NS, INFY.NS…</div>
+      </div>
+    </div>
+    <div class="bottom-panels" id="bottom-panels" style="display:none">
+      <div class="bp-panel" id="bp-confluence">
+        <div class="bp-h">MAJOR CONFLUENCE ZONES</div>
+        <div class="bp-body" id="bp-confluence-body"></div>
+      </div>
+      <div class="bp-panel" id="bp-trade-plans">
+        <div class="bp-h">CONDITIONAL TRADE PLANS</div>
+        <div class="bp-body" id="bp-trade-plans-body"></div>
+      </div>
+      <div class="bp-panel" id="bp-vp-interp">
+        <div class="bp-h">VOLUME PROFILE INTERPRETATION</div>
+        <div class="bp-body" id="bp-vp-interp-body"></div>
+      </div>
+    </div>
+    <div class="news-timeline" id="news-timeline" style="display:none">
+      <div class="nt-header">NEWS TIMELINE · sorted by date (newest first)</div>
+      <div class="nt-cards" id="nt-cards"></div>
+    </div>
+    </div>
+    <aside id="side-panel" class="side-panel">
+      <div class="sp-block ctx-block" id="sp-context">
+        <div class="sp-h">Current situation</div>
+        <div class="ctx-content" id="sp-context-content">
+          <div class="sp-dim">load a symbol to see the read</div>
+        </div>
+      </div>
+      <div class="sp-block" id="sp-selected" style="display:none">
+        <div class="sp-h">Selected primitive</div>
+        <div class="sp-content" id="sp-selected-content"></div>
+      </div>
+    </aside>
+  </div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
