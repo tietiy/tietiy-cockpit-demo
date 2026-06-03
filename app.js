@@ -147,6 +147,7 @@ let _srZonesToDraw = [];
 let _orderBlocksToDraw = [];
 let _sweepsToDraw = [];
 let _trapsToDraw = [];
+let _candlePsychToDraw = [];
 let overlayCanvas = null;
 let overlayCtx = null;
 let _chartHost = null;
@@ -454,6 +455,50 @@ function _drawTrapsOverlay() {
   }
 }
 
+// Candle-psychology overlay — small 1-letter badge near each detected pattern.
+// Compact by design: 9px mono letter in a colored circle. Letters:
+//   H=hammer  S=shooting_star  E=engulfing  D=doji  P=pin_bar
+//   I=inside_bar  O=outside_bar  M=marubozu
+const _CP_LETTERS = {
+  hammer: 'H', shooting_star: 'S', engulfing: 'E', doji: 'D',
+  pin_bar: 'P', inside_bar: 'I', outside_bar: 'O', marubozu: 'M',
+};
+function _drawCandlePsychOverlay() {
+  if (!overlayCanvas || !overlayCtx) return;
+  if (!_candlePsychToDraw.length) return;
+  const ts = chart.timeScale();
+
+  for (const cp of _candlePsychToDraw) {
+    const x = ts.timeToCoordinate(cp.t);
+    const yHi = candle.priceToCoordinate(cp.price_hi);
+    const yLo = candle.priceToCoordinate(cp.price_lo);
+    if (x === null || yHi === null || yLo === null) continue;
+    const letter = _CP_LETTERS[cp.pattern] || '·';
+    const isBull = cp.direction === 'bullish';
+    const isBear = cp.direction === 'bearish';
+    const color = isBull ? 'rgba(34, 197, 94, 0.95)'
+                : isBear ? 'rgba(239, 68, 68, 0.95)'
+                :          'rgba(174, 182, 194, 0.85)';   // neutral
+    // Bullish patterns label below the low; bearish above the high; neutral above.
+    const cx = x;
+    const cy = isBull ? yLo + 12 : yHi - 12;
+    // Small filled circle behind the letter for legibility
+    overlayCtx.beginPath();
+    overlayCtx.arc(cx, cy, 7, 0, Math.PI * 2);
+    overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.78)';
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = color;
+    overlayCtx.lineWidth = 1.2;
+    overlayCtx.stroke();
+    // Letter
+    overlayCtx.font = 'bold 9px "JetBrains Mono", monospace';
+    overlayCtx.fillStyle = color;
+    overlayCtx.textAlign = 'center';
+    overlayCtx.textBaseline = 'middle';
+    overlayCtx.fillText(letter, cx, cy + 0.5);
+  }
+}
+
 function _drawSRZoneOverlay() {
   if (!overlayCanvas || !overlayCtx) return;
   const w = overlayCanvas.width / (window.devicePixelRatio || 1);
@@ -473,6 +518,8 @@ function _drawSRZoneOverlay() {
   _drawLiquiditySweepsOverlay();
   // Traps — X-mark at the failure bar + dashed connector to the failed BOS level.
   _drawTrapsOverlay();
+  // Candle psychology — small letter badges (off by default to keep chart clean).
+  _drawCandlePsychOverlay();
   // (fib overlay moved to AFTER the zone loop — see end of function — so fib lines
   // and labels render on TOP of zone fillRects instead of being covered by them.)
   if (!_srZonesToDraw.length) { _drawFibsOverlay(); return; }
@@ -713,6 +760,7 @@ let showSRZones     = true;       // FOCUS: the ONLY structural layer on the cha
 let showOrderBlocks = true;       // OB rectangles — bullish_ob/bearish_ob (Step-1 brain L1)
 let showLiquiditySweeps = true;   // Sweep markers — sweep_low/sweep_high + Spring/UTAD (Step-1)
 let showTraps = true;             // Trap markers — bull_trap/bear_trap (failed BOS, Step-1)
+let showCandlePsych = false;      // Candle-psychology badges — DEFAULT OFF (can be noisy)
 let showFibs        = true;
 let showTrendlines  = true;
 let showZigzagMajor = false;
@@ -2834,6 +2882,24 @@ function applyImportanceFilterAndRender(){
     return Math.min(...z.anchors.map(a => a.t));
   }
 
+  // ── Candle psychology → canvas-overlay list ─────────────────────────────
+  _candlePsychToDraw.length = 0;
+  if (showCandlePsych && !presentMode) {
+    const cpOut = currentPrimitives['candle_psychology'];
+    const cpPrims = (cpOut?.primitives || []).filter(p => p.kind === 'candle_psychology');
+    for (const p of cpPrims) {
+      const f = p.factors || {};
+      _candlePsychToDraw.push({
+        t:        p.anchors[0].t,
+        price_hi: p.price_hi,
+        price_lo: p.price_lo,
+        pattern:  f.pattern,
+        direction: f.direction,
+        psychology: f.psychology,
+      });
+    }
+  }
+
   // ── Traps → canvas-overlay list ─────────────────────────────────────────
   _trapsToDraw.length = 0;
   if (showTraps && !presentMode) {
@@ -3392,6 +3458,9 @@ bindToggle('t-liquidity-sweeps',
 bindToggle('t-traps',
   () => { showTraps = true;  applyImportanceFilterAndRender(); },
   () => { showTraps = false; applyImportanceFilterAndRender(); });
+bindToggle('t-candle-psych',
+  () => { showCandlePsych = true;  applyImportanceFilterAndRender(); },
+  () => { showCandlePsych = false; applyImportanceFilterAndRender(); });
 bindToggle('t-trendlines',
   () => { showTrendlines  = true;  applyImportanceFilterAndRender(); },
   () => { showTrendlines  = false; applyImportanceFilterAndRender(); });
