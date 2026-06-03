@@ -596,11 +596,15 @@ body.fullchart-mode .chart-fs-btn { display: none; }
   border: 1px solid rgba(124, 134, 158, 0.12);
 }
 .chart-toolbar .dd-body {
-  /* Open UPWARD (above the summary) since the toolbar is at the bottom-LEFT.
-     Override `right: 0` from the base .dd-body so the menu opens to the
-     RIGHT — leftward would extend off-screen past the chart cell's left edge. */
-  top: auto; bottom: 36px;
-  right: auto; left: 0;
+  /* The chart cell has overflow:hidden (clips the LWC chart's growth).
+     That means any absolute-positioned dropdown extending past the chart's
+     edges gets clipped — including the dropdown extending UPWARD from the
+     bottom-left toolbar, which exceeds the chart's top edge.
+     Fix: use position:fixed so the dropdown escapes the chart's clip.
+     JS sets the fixed coordinates when the menu opens (see _positionToolbarDropdown). */
+  position: fixed;
+  top: auto; right: auto;
+  z-index: 200;
 }
 
 .dd-menu summary {

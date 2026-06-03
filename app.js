@@ -2203,6 +2203,34 @@ document.addEventListener('click', (e) => {
     if (!d.contains(e.target)) d.open = false;
   });
 });
+
+// ─── Position the chart-toolbar dropdowns when they open ──────────────────
+// CSS sets position:fixed on .chart-toolbar .dd-body so the dropdown escapes
+// the chart cell's overflow:hidden clip. JS computes the fixed coordinates
+// from the toggle summary's location each time the menu opens.
+function _positionToolbarDropdown(detailsEl) {
+  const body = detailsEl.querySelector('.dd-body');
+  if (!body) return;
+  const summary = detailsEl.querySelector('summary');
+  const rect = summary.getBoundingClientRect();
+  // Open UPWARD from the summary — there's space ABOVE (chart area).
+  // Below the toolbar is the dock cell which has limited room.
+  // Anchor the dropdown's BOTTOM edge 6px above the summary's TOP edge;
+  // the dropdown's own height makes it grow upward naturally.
+  body.style.left   = rect.left + 'px';
+  body.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+  body.style.top    = 'auto';
+}
+// Toggle handler — re-positions every time a chart-toolbar dropdown opens.
+document.querySelectorAll('.chart-toolbar .dd-menu').forEach(d => {
+  d.addEventListener('toggle', () => {
+    if (d.open) _positionToolbarDropdown(d);
+  });
+});
+// Re-position on window resize while open
+window.addEventListener('resize', () => {
+  document.querySelectorAll('.chart-toolbar .dd-menu[open]').forEach(_positionToolbarDropdown);
+});
 // ESC also closes them.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
