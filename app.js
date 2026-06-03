@@ -3095,6 +3095,29 @@ impSlider.addEventListener('input', () => {
   applyImportanceFilterAndRender();
 });
 
+// Populate the landing placeholder's chip cloud with every symbol in the
+// universe — click any chip to load it. Re-rendered whenever the universe
+// changes (only at bootstrap currently, but cheap enough).
+function _renderLandingChips() {
+  const wrap = document.getElementById('ph-chips');
+  if (!wrap) return;
+  if (!UNIVERSE.length) {
+    wrap.innerHTML = `<span class="ph-chip-dim">universe failed to load</span>`;
+    return;
+  }
+  wrap.innerHTML = UNIVERSE.map(s => `<span class="ph-chip" data-sym="${_esc(s)}">${_esc(s)}</span>`).join('');
+}
+// Click delegation for landing chips
+document.addEventListener('click', e => {
+  const chip = e.target.closest && e.target.closest('.ph-chip');
+  if (chip && chip.dataset && chip.dataset.sym) {
+    const sym = chip.dataset.sym;
+    const searchEl = document.getElementById('search');
+    if (searchEl) searchEl.value = sym;
+    loadSymbol(sym);
+  }
+});
+
 // ---- bootstrap: load universe + run-dates, then optionally auto-load ?sym= ----
 (async () => {
   // Tier-1 redesign: fire cmdbar index chips in parallel (NIFTY / BANKNIFTY / VIX)
@@ -3108,6 +3131,8 @@ impSlider.addEventListener('input', () => {
     showStatus('error', `universe unavailable: ${u.error}`);
     dropdown.innerHTML = `<div class="dd-empty">universe load failed: ${u.error}</div>`;
   }
+  // Landing-page chip cloud now that we know what's in the universe
+  _renderLandingChips();
   // PIT date selector population
   RUN_DATES = rd.ok ? rd.dates : [];
   pitDateSel.innerHTML = '';
@@ -3128,5 +3153,12 @@ impSlider.addEventListener('input', () => {
   // Deep-link: /?sym=RELIANCE.NS auto-loads on page open (useful for sharing).
   const params = new URLSearchParams(window.location.search);
   const sym = params.get('sym');
-  if (sym){ search.value = sym.toUpperCase(); loadSymbol(sym.toUpperCase()); }
+  if (sym){
+    search.value = sym.toUpperCase();
+    loadSymbol(sym.toUpperCase());
+  } else {
+    // No deep link → focus the search input so the operator can start typing
+    // immediately. Defer to next tick so the input is laid out first.
+    requestAnimationFrame(() => { if (search) search.focus(); });
+  }
 })();
