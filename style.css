@@ -132,7 +132,11 @@ body::before {
   position: relative; z-index: 1;
   display: grid;
   grid-template-columns: 280px 1fr 320px;
-  grid-template-rows:    48px 52px 1fr 240px;
+  /* 56px cmdbar so the wordmark (16px+22px diamond) + 34px search input fit
+     comfortably with breathing room. Previous 48px caused the wordmark to
+     overflow into the chart row (operator reported "cmd bar overlapping
+     chart window" — 2026-06-03). */
+  grid-template-rows:    56px 52px 1fr 240px;
   grid-template-areas:
     "cmdbar cmdbar  cmdbar"
     "hero   banner  rail"
@@ -164,8 +168,9 @@ body::before {
   border-radius: var(--radius);
   overflow: visible;       /* CRITICAL: the autocomplete dropdown overflows
                               the bar downward — without this it gets clipped */
-  z-index: 50;             /* sit above other glass cells so the dropdown
-                              renders above .hero / .banner / .chart */
+  /* No z-index here: dropdown handles its own z-index 9999. Keeping cmdbar
+     at default stacking prevents its content from ever painting over the
+     chart row below. */
 }
 .banner { border-radius: var(--radius); }
 
@@ -556,9 +561,14 @@ body::before {
 /* Floating chart toolbar — moved to BOTTOM-LEFT so it stops fighting the
    cmdbar search input on narrow viewports. Dropdowns open upward. */
 .chart-toolbar {
-  position: absolute; bottom: 8px; left: 12px;
+  position: absolute; bottom: 10px; left: 12px;
   display: flex; align-items: center; gap: 6px;
-  z-index: 5;
+  z-index: 6;                                   /* above LWC's chart canvas */
+  background: rgba(13, 17, 30, 0.55);            /* faint backdrop so contents are legible */
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 134, 158, 0.12);
 }
 .chart-toolbar .dd-body {
   /* Open UPWARD (above the summary) since the toolbar is at the bottom now */
@@ -568,18 +578,20 @@ body::before {
 .dd-menu summary {
   list-style: none;
   cursor: pointer;
-  padding: 5px 10px;
-  background: rgba(20, 26, 36, 0.86);
-  border: 1px solid var(--ink-2);
+  padding: 6px 12px;
+  background: rgba(13, 17, 30, 0.94);            /* dense for contrast vs candles */
+  border: 1px solid rgba(124, 134, 158, 0.40);   /* visible rim on dark chart */
   border-radius: 6px;
-  font-size: 11px; font-weight: 600;
-  letter-spacing: 0.5px;
-  color: var(--text-2);
+  font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.7px;
+  color: var(--text);
   user-select: none;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
 }
 .dd-menu summary::-webkit-details-marker { display: none; }
-.dd-menu summary:hover { color: var(--text); border-color: var(--ink-4); }
-.dd-menu[open] summary { color: var(--text); border-color: var(--gold); }
+.dd-menu summary:hover { color: var(--accent); border-color: var(--accent); box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 14px rgba(92, 225, 230, 0.18); }
+.dd-menu[open] summary { color: var(--accent); border-color: var(--accent); }
 .dd-menu { position: relative; }
 
 .dd-body {
