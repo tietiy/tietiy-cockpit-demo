@@ -380,33 +380,60 @@ function _renderSymhead(m) {
   const sCls = up ? 'up' : 'down';
   const mcap = (typeof m.market_cap_cr === 'number')
     ? (m.market_cap_cr >= 100000
-        ? `₹${(m.market_cap_cr / 100000).toFixed(2)}L Cr`   // lakh cr
+        ? `₹${(m.market_cap_cr / 100000).toFixed(2)}L Cr`
         : `₹${m.market_cap_cr.toLocaleString('en-IN', {maximumFractionDigits: 0})} Cr`)
     : null;
   const avgVol = (typeof m.avg_volume_10d === 'number')
     ? (m.avg_volume_10d >= 100 ? `${m.avg_volume_10d.toFixed(0)} L` : `${m.avg_volume_10d.toFixed(1)} L`)
     : null;
-  // Layout: Title row (company name + symbol) | Price block | Stats chips
-  let html = '<div class="sym-title-row">';
+
+  // Tier-1 redesign: vertical hero column. Title → big price → 2-col chip grid
+  // → regime pill → RS sparkline block. CSS lays children out via flex column.
+  let html = '';
   html += `<div class="sym-title">`;
   if (m.company_name) html += `<div class="sym-company">${_esc(m.company_name)}</div>`;
   html += `<div class="sym-ticker">${_esc(m.symbol)}<span class="sym-ex">NSE</span></div>`;
   html += `</div>`;
+
   html += `<div class="sym-price-block">`;
   html += `<div class="sym-last">${(m.last_close || 0).toFixed(2)}</div>`;
   html += `<div class="sym-chg ${sCls}">${sign} ${Math.abs(m.change || 0).toFixed(2)} <span>(${(m.change_pct || 0).toFixed(2)}%)</span></div>`;
   html += `</div>`;
-  html += '</div>';
-  // Chip row: industry, sector, market cap, avg volume, beta, last bar date
+
   html += '<div class="sym-chips">';
-  if (m.industry) html += `<div class="sym-chip"><span class="chip-k">INDUSTRY</span><span class="chip-v">${_esc(m.industry)}</span></div>`;
-  if (m.sector)   html += `<div class="sym-chip"><span class="chip-k">SECTOR</span><span class="chip-v">${_esc(m.sector)}</span></div>`;
-  if (mcap)       html += `<div class="sym-chip"><span class="chip-k">MARKET CAP</span><span class="chip-v">${mcap}</span></div>`;
-  if (avgVol)    html += `<div class="sym-chip"><span class="chip-k">AVG VOL (10D)</span><span class="chip-v">${avgVol}</span></div>`;
+  if (m.industry) html += `<div class="sym-chip full"><span class="chip-k">Industry</span><span class="chip-v">${_esc(m.industry)}</span></div>`;
+  if (m.sector)   html += `<div class="sym-chip full"><span class="chip-k">Sector</span><span class="chip-v">${_esc(m.sector)}</span></div>`;
+  if (mcap)       html += `<div class="sym-chip"><span class="chip-k">M-Cap</span><span class="chip-v">${mcap}</span></div>`;
+  if (avgVol)     html += `<div class="sym-chip"><span class="chip-k">Avg Vol</span><span class="chip-v">${avgVol}</span></div>`;
   if (typeof m.beta === 'number')
-                  html += `<div class="sym-chip"><span class="chip-k">β</span><span class="chip-v">${m.beta.toFixed(2)}</span></div>`;
-  if (m.last_bar_iso) html += `<div class="sym-chip"><span class="chip-k">LAST BAR</span><span class="chip-v">${m.last_bar_iso}</span></div>`;
+                   html += `<div class="sym-chip"><span class="chip-k">β</span><span class="chip-v">${m.beta.toFixed(2)}</span></div>`;
+  if (m.last_bar_iso) html += `<div class="sym-chip"><span class="chip-k">As of</span><span class="chip-v">${m.last_bar_iso}</span></div>`;
   html += '</div>';
+
+  // Regime pill (per-stock — color-coded GREEN/AMBER/RED)
+  if (m.regime_color) {
+    const colorTok = m.regime_color === 'GREEN' ? 'GREEN'
+                   : m.regime_color === 'AMBER' ? 'AMBER'
+                   : 'RED';
+    html += `<div class="hero-regime">`;
+    html += `<span class="hr-k">Regime</span>`;
+    html += `<span class="hr-pill ${colorTok}">${_esc(m.regime_color)}</span>`;
+    html += `</div>`;
+  }
+
+  // Relative strength block (vs NIFTY500 — 10/20/50d %)
+  if (m.rs_class) {
+    const fmt = (n) => typeof n === 'number' ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : '—';
+    const sgn = (n) => typeof n === 'number' ? (n >= 0 ? 'up' : 'down') : '';
+    html += `<div class="hero-rs">`;
+    html += `<div class="hrs-k">Relative vs NIFTY500</div>`;
+    html += `<div class="hrs-row"><span class="lbl">10d</span><span class="val ${sgn(m.rs_10d)}">${fmt(m.rs_10d)}</span></div>`;
+    html += `<div class="hrs-row"><span class="lbl">20d</span><span class="val ${sgn(m.rs_20d)}">${fmt(m.rs_20d)}</span></div>`;
+    html += `<div class="hrs-row"><span class="lbl">50d</span><span class="val ${sgn(m.rs_50d)}">${fmt(m.rs_50d)}</span></div>`;
+    html += `<div class="hrs-class">${_esc(m.rs_class.replace(/_/g, ' '))}</div>`;
+    html += `</div>`;
+  }
+
   symhead.innerHTML = html;
 }
 
@@ -419,7 +446,9 @@ function _refreshSymheadFromMetadata(outputs) {
   const chgPct = (chg / (prev.close || 1)) * 100;
   const hi52 = Math.max(...currentBars.map(b => b.high));
   const lo52 = Math.min(...currentBars.map(b => b.low));
-  const mFacts = outputs?.stock_metadata?.facts || {};
+  const mFacts  = outputs?.stock_metadata?.facts   || {};
+  const stkF    = outputs?.stock_regime?.facts     || {};
+  const rsF     = outputs?.relative_strength?.facts || {};
   _renderSymhead({
     symbol: currentSymbol || '',
     company_name:    mFacts.company_name || '',
@@ -436,6 +465,12 @@ function _refreshSymheadFromMetadata(outputs) {
     last_bar_iso:    epochToISO(last.time),
     volume:          last.volume,
     bars_count:      currentBars.length,
+    // Tier-1 redesign — surface regime + RS into hero column
+    regime_color:    stkF.stock_regime_color || null,
+    rs_class:        rsF.rs_classification || null,
+    rs_10d:          rsF.rs_10d_pct,
+    rs_20d:          rsF.rs_20d_pct,
+    rs_50d:          rsF.rs_50d_pct,
   });
 }
 
@@ -840,6 +875,434 @@ function _buildStateBanner() {
   stateBanner.innerHTML = parts.join('');
   stateBanner.style.display = 'block';
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+//                          TIER-1 REDESIGN  (2026-06-03)
+//
+// The 3-zone bento grid replaces the previous side-panel + bottom-panels +
+// news-strip stack. Three new render entrypoints fed by the same producer
+// outputs the previous code used:
+//
+//   _renderCmdbarIndices()  → NIFTY / BANKNIFTY / VIX live PIT chips
+//   _renderRail()           → Decision Verb hero + HTF/Regime + Key Levels
+//   _renderDock()           → tabbed: Levels · Plans · News · Volume · …
+//
+// No producer schema changes — pure presentation-layer refactor.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── Cmdbar index chips ────────────────────────────────────────────────────
+async function _renderCmdbarIndices() {
+  const CHIPS = [
+    { id: 'idx-nifty50',   sym: 'NIFTY50'   },
+    { id: 'idx-banknifty', sym: 'BANKNIFTY' },
+    { id: 'idx-vix',       sym: 'INDIAVIX'  },
+  ];
+  for (const c of CHIPS) {
+    const el = document.getElementById(c.id);
+    if (!el) continue;
+    try {
+      const res = await fetchOhlcv(c.sym);
+      if (!res.ok) { el.querySelector('.idx-v').textContent = '—'; continue; }
+      const bars = res.bars;
+      if (!bars.length) { el.querySelector('.idx-v').textContent = '—'; continue; }
+      const last = bars[bars.length - 1];
+      const prev = bars[bars.length - 2] || last;
+      const chg = last.close - prev.close;
+      const chgPct = (chg / (prev.close || 1)) * 100;
+      const up = chg >= 0;
+      const fmt = (p) => p >= 10000 ? p.toFixed(0) : p.toFixed(2);
+      el.querySelector('.idx-v').textContent = fmt(last.close);
+      const d = el.querySelector('.idx-d');
+      d.textContent = `${up ? '▲' : '▼'} ${Math.abs(chgPct).toFixed(2)}%`;
+      d.classList.toggle('up',   up);
+      d.classList.toggle('down', !up);
+    } catch (_) { /* fail-silent — chip stays "—" */ }
+  }
+}
+
+// ─── Right rail — Decision Verb hero + HTF/Regime + Key Levels ─────────────
+function _renderRail() {
+  const rail = document.getElementById('rail');
+  if (!rail) return;
+  if (!currentSymbol || !currentBars.length) {
+    rail.innerHTML = `<div class="empty">load a symbol to see the read</div>`;
+    return;
+  }
+  const outputs = currentPrimitives || {};
+  const ds = outputs.dashboard_state?.primitives?.[0]?.factors || null;
+
+  let html = '';
+
+  if (ds) {
+    // Decision Verb — prefer producer-supplied field (Tier-1 dashboard_state);
+    // fall back to derivation for older PIT dates baked before the producer was bumped.
+    let verb      = ds.decision_verb;
+    let verbClass = ds.decision_verb_class;
+    if (!verb) {
+      const dec = ds.decision || 'No Edge';
+      const ts  = ds.trend_state || '';
+      const lostSupply = (ds.price_location_text || '').includes('Below Failed Supply');
+      if (lostSupply && ts === 'BEAR')              { verb = 'STAND DOWN';  verbClass = 'err';  }
+      else if (dec === 'Actionable If Confirms')    { verb = 'ARM';         verbClass = 'up';   }
+      else if (dec === 'Watch Only')                { verb = 'WATCH';       verbClass = 'warn'; }
+      else                                          { verb = 'WAIT';        verbClass = 'dim';  }
+    }
+    const decision   = ds.decision            || 'No Edge';
+    const readiness  = Math.max(0, Math.min(100, ds.trade_readiness_score   ?? 0));
+    const confidence = Math.max(0, Math.min(100, ds.decision_confidence_score ?? 0));
+
+    // Decision Hero tile
+    html += `<div class="r-hero ${verbClass}">`;
+    html += `  <div class="r-verb-k">Decision</div>`;
+    html += `  <div class="r-verb ${verbClass}">${_esc(verb)}</div>`;
+    html += `  <div class="r-verb-sub">${_esc(decision)}</div>`;
+    html += `  <div class="r-scores">`;
+    html += `    <div class="r-score-row">
+                    <div class="r-score-k"><span>Trade Readiness</span><span class="r-score-v">${readiness}/100</span></div>
+                    <div class="r-score-bar ${verbClass}"><i style="width:${readiness}%"></i></div>
+                  </div>`;
+    html += `    <div class="r-score-row">
+                    <div class="r-score-k"><span>Confidence</span><span class="r-score-v">${confidence}/100</span></div>
+                    <div class="r-score-bar"><i style="width:${confidence}%"></i></div>
+                  </div>`;
+    html += `  </div>`;
+    html += `</div>`;
+  } else {
+    html += `<div class="r-hero">`;
+    html += `  <div class="r-verb-k">Decision</div>`;
+    html += `  <div class="r-verb">—</div>`;
+    html += `  <div class="r-verb-sub">dashboard_state not yet computed for this date</div>`;
+    html += `</div>`;
+  }
+
+  // HTF + Regime row
+  const htfF = outputs.htf_context?.facts     || {};
+  const rgF  = outputs.regime?.facts          || {};
+  const stkF = outputs.stock_regime?.facts    || {};
+  const htfTrend     = htfF.weekly_trend_state || htfF.weekly_trend || (outputs.structure_label?.facts?.trend_state) || '—';
+  const marketRegime = rgF.regime_color || '—';
+  const stockRegime  = stkF.stock_regime_color || '—';
+  const trendCls = htfTrend === 'BULL' ? 'up' : htfTrend === 'BEAR' ? 'down' : 'warn';
+  const mRegCls  = marketRegime === 'GREEN' ? 'up' : (marketRegime === 'RED' || marketRegime === 'DEEP_RED') ? 'down' : 'warn';
+  const sRegCls  = stockRegime  === 'GREEN' ? 'up' : (stockRegime  === 'RED' || stockRegime  === 'DEEP_RED') ? 'down' : 'warn';
+
+  html += `<div class="r-head">Context</div>`;
+  html += `<div class="r-htf">`;
+  html += `  <div class="r-htf-cell"><div class="k">Weekly</div><div class="v ${trendCls}">${_esc(htfTrend)}</div></div>`;
+  html += `  <div class="r-htf-cell"><div class="k">Market</div><div class="v ${mRegCls}">${_esc(marketRegime)}</div></div>`;
+  html += `</div>`;
+  html += `<div class="r-htf">`;
+  html += `  <div class="r-htf-cell"><div class="k">Stock Reg.</div><div class="v ${sRegCls}">${_esc(stockRegime)}</div></div>`;
+  // Event-risk pill (next corp event)
+  const erF = outputs.event_risk?.facts || {};
+  let evText = '—', evCls = 'warn';
+  if (erF.blocking_active) {
+    evText = 'BLOCKED'; evCls = 'down';
+  } else if (typeof erF.next_event_days === 'number') {
+    evText = `${erF.next_event_days}d`; evCls = erF.next_event_days <= 2 ? 'warn' : 'up';
+  } else if (typeof erF.last_event_days_ago === 'number') {
+    evText = `${erF.last_event_days_ago}d ago`; evCls = '';
+  }
+  html += `  <div class="r-htf-cell"><div class="k">Event Risk</div><div class="v ${evCls}">${_esc(evText)}</div></div>`;
+  html += `</div>`;
+
+  // Key Levels list (from dashboard_state)
+  const keyLevels = ds?.key_levels || [];
+  if (keyLevels.length) {
+    html += `<div class="r-head" style="margin-top:8px">Key Levels</div>`;
+    html += `<div class="r-levels">`;
+    for (const lv of keyLevels) {
+      const icon = lv.kind === 'choch'  ? '◆'
+                 : lv.kind === 'supply' ? '▼'
+                 : lv.kind === 'demand' ? '▲'
+                 : lv.kind === 'pivot'  ? '◦'
+                 : '·';
+      html += `<div class="r-level ${_esc(lv.kind || '')}">
+                 <span class="lv-icon">${icon}</span>
+                 <span class="lv-name">${_esc(lv.name)}</span>
+                 <span class="lv-val">${_esc(lv.value)}</span>
+               </div>`;
+    }
+    html += `</div>`;
+  }
+
+  rail.innerHTML = html;
+}
+
+// ─── Bottom dock — tabbed (Levels · Plans · News · Volume · Relative · Setup) ─
+let _currentDockTab = 'levels';
+let _dockTabInitDone = false;
+
+function _renderDock() {
+  const dockBody = document.getElementById('dock-body');
+  if (!dockBody) return;
+  if (!currentSymbol || !currentBars.length) {
+    dockBody.innerHTML = `<div class="dock-empty">load a symbol to populate</div>`;
+    return;
+  }
+
+  const outputs = currentPrimitives || {};
+
+  // News badge count
+  const newsPrims = (outputs.news_marker?.primitives || []).filter(p => p.kind === 'news_marker');
+  const newsBadge = document.getElementById('badge-news');
+  if (newsBadge) newsBadge.textContent = newsPrims.length ? String(newsPrims.length) : '';
+
+  // Default tab: news IF fresh news in last 3 trading days, else levels.
+  // Auto-pick only on first load per symbol; respect manual user tab choice after.
+  if (!_dockTabInitDone) {
+    const lastT = currentBars[currentBars.length - 1].time;
+    const cut = lastT - (4.5 * 86400);   // ≈3 trading days
+    const fresh = newsPrims.some(p => p.anchors[0].t >= cut);
+    _currentDockTab = fresh ? 'news' : 'levels';
+    _dockTabInitDone = true;
+  }
+
+  // Highlight active tab
+  document.querySelectorAll('.dock-tab').forEach(t => {
+    if (t.classList.contains('dim')) return;
+    t.classList.toggle('active', t.dataset.tab === _currentDockTab);
+  });
+
+  // Dispatch to tab renderer
+  const RENDERERS = {
+    levels:   _renderLevelsTab,
+    plans:    _renderPlansTab,
+    news:     _renderNewsTab,
+    volume:   _renderVolumeTab,
+    relative: _renderRelativeTab,
+    setup:    _renderSetupTab,
+    journal:  _renderJournalTab,
+  };
+  const fn = RENDERERS[_currentDockTab] || _renderLevelsTab;
+  dockBody.innerHTML = fn(outputs, currentBars);
+}
+
+// ─── Tab renderers ──────────────────────────────────────────────────────────
+
+function _renderLevelsTab(outputs, bars) {
+  const sr  = outputs.sr_zones;
+  const zones = (sr?.primitives || []).filter(p => p.kind === 'sr_zone');
+  const confOut = outputs.confluence;
+  const confluencePrims = (confOut?.primitives || []).filter(p => p.kind === 'confluence');
+  const chochP = (typeof _chochTriggerPrice === 'number') ? _chochTriggerPrice : null;
+
+  const findConf = (z) => confluencePrims.find(c => c.price_lo === z.price_lo && c.price_hi === z.price_hi);
+  const labelOf = (z) => {
+    const f = z.factors || {};
+    if (f.htf_confirmed) return 'HTF DEMAND ZONE';
+    if (f.lifecycle === 'failed_reclaim') return 'HTF SUPPLY / FAILED RECLAIM';
+    if (f.classification === 'minor_support') return 'PIVOT / BALANCE ZONE';
+    if ((f.classification || '').includes('resistance')) return 'MINOR RESISTANCE';
+    return 'REFERENCE ZONE';
+  };
+  const klassOf = (z) => {
+    const f = z.factors || {};
+    if (f.htf_confirmed) return 'demand';
+    if ((f.classification || '').includes('resistance')) return 'supply';
+    if (f.classification === 'minor_support') return 'pivot';
+    return '';
+  };
+
+  const sorted = zones.slice().sort((a, b) => {
+    const ca = findConf(a), cb = findConf(b);
+    const sa = ca?.factors?.confluence_score || 0;
+    const sb = cb?.factors?.confluence_score || 0;
+    if (sa !== sb) return sb - sa;
+    return b.price - a.price;
+  });
+
+  let cards = '';
+  if (chochP != null) {
+    cards += `<div class="lv-card choch">
+                <div class="lvc-title">CHoCH Trigger · Structure Flip</div>
+                <div class="lvc-price">₹${chochP.toFixed(2)}</div>
+                <div class="lvc-meta">Close ${(outputs.structure_label?.facts?.trend_state || '') === 'BEAR' ? 'above' : 'below'} → trend reverses</div>
+              </div>`;
+  }
+  for (const z of sorted) {
+    const cf = findConf(z);
+    const meta = cf
+      ? `score ${cf.factors.confluence_score}/100 · ${(Object.keys(cf.factors.score_breakdown || {})).join(' · ')}`
+      : (z.factors?.lifecycle || '');
+    cards += `<div class="lv-card ${klassOf(z)}">
+                <div class="lvc-title">${_esc(labelOf(z))}</div>
+                <div class="lvc-price">${z.price_lo.toFixed(0)} – ${z.price_hi.toFixed(0)}</div>
+                <div class="lvc-meta">${_esc(meta)}</div>
+              </div>`;
+  }
+  if (!cards) return `<div class="dock-empty">No confluence zones detected</div>`;
+  return `<div class="dock-grid">${cards}</div>`;
+}
+
+function _renderPlansTab(outputs, bars) {
+  const setupOut = outputs.setup;
+  const setupPrims = (setupOut?.primitives || []).filter(p => p.kind === 'setup');
+  const sr = outputs.sr_zones;
+  const zones = (sr?.primitives || []).filter(p => p.kind === 'sr_zone');
+  const supplyZone = zones.find(z => (z.factors?.classification || '').includes('resistance'));
+  const chochP = (typeof _chochTriggerPrice === 'number') ? _chochTriggerPrice : null;
+
+  const plans = [];
+  if (setupPrims.length && setupPrims[0].factors?.family !== 'NO_SETUP') {
+    setupPrims.forEach((sp, idx) => {
+      const f = sp.factors || {};
+      const targets = (f.target_levels || []).map(n => `₹${(+n).toFixed(0)}`).join(' → ') || 'TBD';
+      plans.push({
+        title: `${String.fromCharCode(65 + idx)}. ${(f.setup_name || 'setup').toUpperCase().replace(/_/g,' ')}`,
+        rows: [
+          ['Family',       f.family || ''],
+          ['Trigger',      f.trigger || ''],
+          ['Invalidation', f.invalidation || ''],
+          ['Targets',      targets],
+          ['Status',       (f.status || 'forming').toUpperCase() + (typeof f.confidence_score === 'number' ? ` · score ${f.confidence_score}/100` : '')],
+        ],
+      });
+    });
+  } else if (supplyZone) {
+    const slo = supplyZone.price_lo.toFixed(0);
+    const shi = supplyZone.price_hi.toFixed(0);
+    plans.push({
+      title: 'A. SUPPLY RECLAIM SETUP',
+      rows: [
+        ['Trigger', `Daily close above ${shi} & retest hold`],
+        ['Entry',   `Retest of ${slo}–${shi}`],
+        ['SL',      `Below retest low / below ${slo}`],
+        ['Targets', chochP != null ? `${chochP.toFixed(2)} (CHoCH)` : 'Next HTF supply'],
+        ['Status',  'WAIT'],
+      ],
+    });
+  }
+
+  if (!plans.length) {
+    return `<div class="dock-empty">No actionable plans for current state — wait for setup formation</div>`;
+  }
+  return `<div class="dock-grid">${
+    plans.map(p =>
+      `<div class="plan-card">
+        <div class="pc-title">${_esc(p.title)}</div>
+        ${p.rows.map(([k,v]) => `<div class="pc-line"><span class="k">${_esc(k)}</span><span class="v">${_esc(v)}</span></div>`).join('')}
+      </div>`
+    ).join('')
+  }</div>`;
+}
+
+function _renderNewsTab(outputs, bars) {
+  const news = (outputs.news_marker?.primitives || []).filter(p => p.kind === 'news_marker');
+  if (!news.length) {
+    return `<div class="dock-empty">No news for this symbol on this PIT date.</div>`;
+  }
+  const sorted = news.slice().sort((a, b) => b.anchors[0].t - a.anchors[0].t);
+  const cards = sorted.map(p => {
+    const f = p.factors || {};
+    const date = new Date(p.anchors[0].t * 1000).toISOString().slice(5, 10);
+    const cat = (f.category || 'company').toLowerCase();
+    const impact = (f.impact || 'medium').toLowerCase();
+    const sent = (f.sentiment || 'neutral').toLowerCase();
+    const conf = f.price_confirmation && f.price_confirmation !== 'n/a' ? f.price_confirmation : null;
+    return `<div class="news-card" data-t="${p.anchors[0].t}">
+              <div class="nc-meta">
+                <span class="nc-cat-dot ${_esc(cat)}"></span>
+                <span class="nc-cat">${_esc(cat)}</span>
+                <span class="nc-date">${_esc(date)}</span>
+                ${impact === 'high' ? `<span class="nc-impact-high">HIGH IMPACT</span>` : ''}
+              </div>
+              <div class="nc-headline">${_esc(f.headline || '')}</div>
+              <div class="nc-footer">
+                <span class="nc-sent ${_esc(sent)}">${_esc(sent.toUpperCase())}</span>
+                ${conf ? `<span>·</span><span class="nc-conf ${_esc(conf)}">${_esc(conf.toUpperCase())}</span>` : ''}
+              </div>
+            </div>`;
+  }).join('');
+  return `<div class="news-grid">${cards}</div>`;
+}
+
+function _renderVolumeTab(outputs, bars) {
+  const sr = outputs.sr_zones;
+  const zones = (sr?.primitives || []).filter(p => p.kind === 'sr_zone');
+  const supplyZone = zones.find(z => (z.factors?.classification || '').includes('resistance'));
+  const pivotZone  = zones.find(z => z.factors?.classification === 'minor_support');
+  const htfDemand  = zones.find(z => z.factors?.htf_confirmed && (z.factors?.classification || '').includes('support'));
+  const chochP = (typeof _chochTriggerPrice === 'number') ? _chochTriggerPrice : null;
+
+  const bullets = [];
+  if (supplyZone && supplyZone.factors?.lifecycle === 'failed_reclaim') bullets.push('Failed-reclaim supply acts as <strong>strong overhead resistance</strong>');
+  if (htfDemand) bullets.push('HTF demand zone (weekly-confirmed) anchors <strong>major support</strong>');
+  if (pivotZone && pivotZone.factors?.lifecycle === 'failed_breakdown') bullets.push('Pivot band was lost then reclaimed — <strong>short-term stabilization</strong>');
+  if (chochP != null) bullets.push(`Close above <strong>${chochP.toFixed(2)}</strong> = trend reversal (CHoCH fires)`);
+  bullets.push('VAH / POC / VAL pending — requires <strong>volume_profile</strong> producer (next session)');
+
+  return `<ul class="vol-list">${bullets.map(b => `<li>${b}</li>`).join('')}</ul>`;
+}
+
+function _renderRelativeTab(outputs, bars) {
+  const rsF = outputs.relative_strength?.facts || {};
+  if (!rsF.rs_classification) {
+    return `<div class="dock-empty">relative_strength producer not available for this run</div>`;
+  }
+  const fmt = (n) => typeof n === 'number' ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : '—';
+  const cls = (n) => typeof n === 'number' ? (n >= 0 ? 'up' : 'down') : '';
+  const corr = (typeof rsF.correlation_60d === 'number') ? rsF.correlation_60d.toFixed(2) : '—';
+  return `<table class="rs-table">
+    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Classification</td><td>${_esc(rsF.rs_classification.replace(/_/g,' ').toUpperCase())}</td></tr>
+      <tr><td>RS Score</td>      <td>${_esc(String(rsF.rs_score ?? '—'))}/10</td></tr>
+      <tr><td>10d vs NIFTY500</td><td class="${cls(rsF.rs_10d_pct)}">${fmt(rsF.rs_10d_pct)}</td></tr>
+      <tr><td>20d vs NIFTY500</td><td class="${cls(rsF.rs_20d_pct)}">${fmt(rsF.rs_20d_pct)}</td></tr>
+      <tr><td>50d vs NIFTY500</td><td class="${cls(rsF.rs_50d_pct)}">${fmt(rsF.rs_50d_pct)}</td></tr>
+      <tr><td>Correlation (60d)</td><td>${_esc(corr)}</td></tr>
+    </tbody>
+  </table>`;
+}
+
+function _renderSetupTab(outputs, bars) {
+  const setupPrims = (outputs.setup?.primitives || []).filter(p => p.kind === 'setup');
+  if (!setupPrims.length || setupPrims[0].factors?.family === 'NO_SETUP') {
+    return `<div class="dock-empty">No setup detected — state machine in idle</div>`;
+  }
+  return setupPrims.map(sp => {
+    const f = sp.factors || {};
+    const conds = (f.conditions_met || []).join(' · ') || '—';
+    const targets = (f.target_levels || []).map(n => `₹${(+n).toFixed(0)}`).join(' → ') || 'TBD';
+    return `<div class="setup-card">
+      <div class="sc-title">${_esc((f.setup_name || 'setup').replace(/_/g,' '))}</div>
+      <div class="sc-line"><span class="k">Family</span><span class="v">${_esc(f.family || '')}</span></div>
+      <div class="sc-line"><span class="k">Status</span><span class="v">${_esc(f.status || 'forming')} · score ${_esc(String(f.confidence_score ?? 0))}/100</span></div>
+      <div class="sc-line"><span class="k">Trigger</span><span class="v">${_esc(f.trigger || '')}</span></div>
+      <div class="sc-line"><span class="k">Invalidation</span><span class="v">${_esc(f.invalidation || '')}</span></div>
+      <div class="sc-line"><span class="k">Targets</span><span class="v">${_esc(targets)}</span></div>
+      <div class="sc-line"><span class="k">Conditions met</span><span class="v">${_esc(conds)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function _renderJournalTab(outputs, bars) {
+  return `<div class="ph-card">
+    <div class="ph-title">Trade Journal</div>
+    <div class="ph-desc">Per-trade outcome logging + cockpit-state snapshot replay. Drives the Phase-8 Validation Gate — does cockpit improve operator edge?</div>
+    <div class="ph-badge">PHASE 8</div>
+  </div>`;
+}
+
+// ─── Wire dock tab click handlers (once at module load) ───────────────────
+document.querySelectorAll('.dock-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.classList.contains('dim')) return;
+    _currentDockTab = tab.dataset.tab;
+    _dockTabInitDone = true;   // user picked → no more auto-default
+    _renderDock();
+  });
+});
+
+// ─── Wire cmdbar top-tabs (chart/scanner/etc) — all but chart are stubs ────
+document.querySelectorAll('.cmd-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.classList.contains('dim')) return;
+    document.querySelectorAll('.cmd-tab').forEach(t => t.classList.toggle('active', t === tab));
+  });
+});
+
 const ddProducersBody = document.getElementById('dd-producers-body');
 const ctxContent = document.getElementById('sp-context-content');
 const spSelected = document.getElementById('sp-selected');
@@ -861,7 +1324,12 @@ function showError(symbol, msg){
   currentMarkersByTime = {};
   settlingNote.style.display = 'none';
   trendBadge.style.display = 'none';
-  ctxContent.innerHTML = `<div class="sp-warn">no data — ${_esc(msg)}</div>`;
+  if (ctxContent) ctxContent.innerHTML = `<div class="sp-warn">no data — ${_esc(msg)}</div>`;
+  // Tier-1 redesign: rail/dock take over from side-panel for error rendering
+  const _rail = document.getElementById('rail');
+  if (_rail) _rail.innerHTML = `<div class="err">no data — ${_esc(msg)}</div>`;
+  const _dockBody = document.getElementById('dock-body');
+  if (_dockBody) _dockBody.innerHTML = `<div class="dock-empty">no data — ${_esc(msg)}</div>`;
   _srZonesToDraw.length = 0;
   _drawSRZoneOverlay();
   legend.style.display = 'none';
@@ -1068,18 +1536,13 @@ function buildContextBox(symbol, bars, outputs){
 }
 
 function updateContextBox(outputs){
-  if (!currentSymbol || !currentBars.length){
-    ctxContent.innerHTML = `<div class="sp-dim">load a symbol to see the read</div>`;
-    return;
-  }
-  ctxContent.innerHTML = buildDashboardPanel(currentSymbol, currentBars, outputs || {});
-  // Reset side-panel scroll so STRUCTURE STATE row is visible — operators land at top.
-  const sidePanel = document.getElementById('side-panel');
-  if (sidePanel) sidePanel.scrollTop = 0;
-  // Populate the fib mini-chart canvas (HTML placeholder was emitted by the dashboard).
-  _drawFibMiniChart(outputs);
-  // Volume profile mini-widget — computed on-the-fly from active swing bars.
-  _drawVolProfileMini(outputs);
+  // Tier-1 redesign: side-panel is replaced by the right rail + bottom dock.
+  // The rail renders the Decision Verb hero, HTF/regime context, key levels.
+  // The dock renders the tabbed intelligence panels (Levels/Plans/News/…).
+  // Legacy ctxContent (if it still exists for some reason) gets a minimal stub.
+  if (ctxContent) ctxContent.innerHTML = '';
+  _renderRail();
+  _renderDock();
 }
 
 // Mini fib-retracement chart — scaled candles for the active swing + fib levels overlaid.
@@ -2144,15 +2607,16 @@ function applyImportanceFilterAndRender(){
     showStatus('live', `live · ${bars} bars`);
   }
 
-  // Refresh symhead with metadata-rich header (consumes stock_metadata producer)
+  // Refresh hero column (company name + price + chips + regime pill + RS block)
   _refreshSymheadFromMetadata(currentPrimitives);
-  // Context box — dynamic prose summary from producer outputs (P3-1 doc §6)
-  updateContextBox(currentPrimitives);
-  // State banner — top-of-chart concat of structure + lifecycle + position + verdict
+  // Banner — top-of-chart concat of structure + lifecycle + position + verdict
   _buildStateBanner();
-  // Bottom 3 panels — Confluence Zones / Trade Plans / Volume Profile Interpretation
+  // Tier-1 redesign: rail + dock replace the old side-panel + bottom-strip + news-strip.
+  // updateContextBox is now a thin shim that invokes both.
+  updateContextBox(currentPrimitives);
+  // No-op call paths kept for compatibility with any external code reading these globals;
+  // their DOM targets (bottomPanels, news-timeline) no longer exist so they early-return.
   _buildBottomPanels();
-  // News timeline row — chronological card list of news_marker primitives
   _buildNewsTimeline();
   // Right-edge axis chips for the key levels (CHoCH + zone hi/lo). Distinct color per
   // level type so operator can read the price axis at a glance per mockup.
@@ -2319,6 +2783,8 @@ impSlider.addEventListener('input', () => {
 
 // ---- bootstrap: load universe + run-dates, then optionally auto-load ?sym= ----
 (async () => {
+  // Tier-1 redesign: fire cmdbar index chips in parallel (NIFTY / BANKNIFTY / VIX)
+  _renderCmdbarIndices();   // fire-and-forget; safe to await later if needed
   const [u, rd] = await Promise.all([fetchUniverse(), fetchRunDates()]);
   if (u.ok){
     UNIVERSE = u.symbols;
