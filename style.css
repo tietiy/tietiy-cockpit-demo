@@ -638,6 +638,7 @@ body::before {
 .ls-swatch        { color: var(--violet)!important; }
 .tr-swatch        { color: var(--warn)!important; }
 .cp-swatch        { color: var(--text-2)!important; }
+.wy-swatch        { color: var(--violet)!important; }
 
 .impctl {
   display: flex; align-items: center; gap: 6px;

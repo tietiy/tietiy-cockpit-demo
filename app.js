@@ -148,6 +148,7 @@ let _orderBlocksToDraw = [];
 let _sweepsToDraw = [];
 let _trapsToDraw = [];
 let _candlePsychToDraw = [];
+let _wyckoffToDraw = null;
 let overlayCanvas = null;
 let overlayCtx = null;
 let _chartHost = null;
@@ -499,6 +500,106 @@ function _drawCandlePsychOverlay() {
   }
 }
 
+// Wyckoff phase overlay: Creek/Ice horizontal channel during accumulation/
+// distribution + per-event labels at SC/AR/ST/Spring/SOS/LPS/BC/UTAD/SOW/LPSY.
+function _drawWyckoffOverlay() {
+  if (!overlayCanvas || !overlayCtx) return;
+  if (!_wyckoffToDraw) return;
+  const ts = chart.timeScale();
+  const w = overlayCanvas.width / (window.devicePixelRatio || 1);
+  const wk = _wyckoffToDraw;
+
+  // Creek/Ice channel (rendered only when channel valid + in accumulation/distribution-context)
+  if (wk.channel && wk.channel.valid
+      && wk.channel.creek_price != null && wk.channel.ice_price != null) {
+    let xs = ts.timeToCoordinate(wk.channel.range_start_t);
+    let xe = ts.timeToCoordinate(wk.channel.range_end_t);
+    const yC = candle.priceToCoordinate(wk.channel.creek_price);
+    const yI = candle.priceToCoordinate(wk.channel.ice_price);
+    if (xs === null) xs = 0;
+    if (xe === null) xe = w;
+    if (yC !== null && yI !== null && xe > xs) {
+      // Channel fill (very faint)
+      overlayCtx.fillStyle = 'rgba(167, 139, 250, 0.05)';
+      overlayCtx.fillRect(xs, yC, xe - xs, yI - yC);
+      // Creek (top) — solid violet
+      overlayCtx.strokeStyle = 'rgba(167, 139, 250, 0.85)';
+      overlayCtx.lineWidth = 1.3;
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(xs, yC); overlayCtx.lineTo(xe, yC);
+      overlayCtx.stroke();
+      // Ice (bottom) — dashed violet
+      overlayCtx.setLineDash([5, 4]);
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(xs, yI); overlayCtx.lineTo(xe, yI);
+      overlayCtx.stroke();
+      overlayCtx.setLineDash([]);
+      // Labels at the right edge
+      overlayCtx.font = 'bold 10px "JetBrains Mono", monospace';
+      overlayCtx.fillStyle = 'rgba(167, 139, 250, 0.95)';
+      overlayCtx.textAlign = 'right';
+      overlayCtx.textBaseline = 'bottom';
+      overlayCtx.fillText('CREEK', xe - 6, yC - 2);
+      overlayCtx.textBaseline = 'top';
+      overlayCtx.fillText('ICE',   xe - 6, yI + 2);
+    }
+  }
+
+  // Event labels at each Wyckoff event
+  for (const e of (wk.events || [])) {
+    const x = ts.timeToCoordinate(e.t);
+    const y = candle.priceToCoordinate(e.price);
+    if (x === null || y === null) continue;
+    // Color by event kind
+    const isBull = ['Spring', 'AR', 'SOS', 'LPS'].includes(e.kind);
+    const isBear = ['UTAD', 'DR', 'SOW', 'LPSY'].includes(e.kind);
+    const color = isBull ? 'rgba(34, 197, 94, 0.95)'
+                : isBear ? 'rgba(239, 68, 68, 0.95)'
+                :          'rgba(245, 158, 11, 0.95)';   // climaxes (SC/BC/ST) = amber
+    // Place label above the high for tops (BC/UTAD/SOW/LPSY) and below the low for bottoms
+    const placeAbove = !isBull;
+    const ly = placeAbove ? y - 16 : y + 16;
+    // Small filled rounded label
+    overlayCtx.font = 'bold 10px "JetBrains Mono", monospace';
+    const w_text = overlayCtx.measureText(e.kind).width + 8;
+    const h_text = 14;
+    overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.92)';
+    overlayCtx.fillRect(x - w_text / 2, ly - h_text / 2, w_text, h_text);
+    overlayCtx.strokeStyle = color;
+    overlayCtx.lineWidth = 1;
+    overlayCtx.strokeRect(x - w_text / 2, ly - h_text / 2, w_text, h_text);
+    overlayCtx.fillStyle = color;
+    overlayCtx.textAlign = 'center';
+    overlayCtx.textBaseline = 'middle';
+    overlayCtx.fillText(e.kind, x, ly + 0.5);
+    // Tick line connecting label to bar
+    overlayCtx.strokeStyle = color;
+    overlayCtx.lineWidth = 0.8;
+    overlayCtx.setLineDash([2, 2]);
+    overlayCtx.beginPath();
+    if (placeAbove) {
+      overlayCtx.moveTo(x, ly + h_text / 2); overlayCtx.lineTo(x, y - 2);
+    } else {
+      overlayCtx.moveTo(x, ly - h_text / 2); overlayCtx.lineTo(x, y + 2);
+    }
+    overlayCtx.stroke();
+    overlayCtx.setLineDash([]);
+  }
+
+  // Phase badge — top-right of chart
+  if (wk.phase && wk.phase !== 'undefined') {
+    const badge = wk.phase.replace('_', ' ').toUpperCase();
+    overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
+    const tw = overlayCtx.measureText(badge).width + 14;
+    overlayCtx.fillStyle = 'rgba(167, 139, 250, 0.92)';
+    overlayCtx.fillRect(w - tw - 12, 8, tw, 20);
+    overlayCtx.fillStyle = '#07090f';
+    overlayCtx.textAlign = 'center';
+    overlayCtx.textBaseline = 'middle';
+    overlayCtx.fillText(badge, w - 12 - tw / 2, 18);
+  }
+}
+
 function _drawSRZoneOverlay() {
   if (!overlayCanvas || !overlayCtx) return;
   const w = overlayCanvas.width / (window.devicePixelRatio || 1);
@@ -520,6 +621,8 @@ function _drawSRZoneOverlay() {
   _drawTrapsOverlay();
   // Candle psychology — small letter badges (off by default to keep chart clean).
   _drawCandlePsychOverlay();
+  // Wyckoff: Creek/Ice channel + event labels (SC/AR/ST/Spring/SOS/LPS).
+  _drawWyckoffOverlay();
   // (fib overlay moved to AFTER the zone loop — see end of function — so fib lines
   // and labels render on TOP of zone fillRects instead of being covered by them.)
   if (!_srZonesToDraw.length) { _drawFibsOverlay(); return; }
@@ -761,6 +864,7 @@ let showOrderBlocks = true;       // OB rectangles — bullish_ob/bearish_ob (St
 let showLiquiditySweeps = true;   // Sweep markers — sweep_low/sweep_high + Spring/UTAD (Step-1)
 let showTraps = true;             // Trap markers — bull_trap/bear_trap (failed BOS, Step-1)
 let showCandlePsych = false;      // Candle-psychology badges — DEFAULT OFF (can be noisy)
+let showWyckoff = true;           // Wyckoff Creek/Ice channel + event labels (Step-1 integrator)
 let showFibs        = true;
 let showTrendlines  = true;
 let showZigzagMajor = false;
@@ -2882,6 +2986,22 @@ function applyImportanceFilterAndRender(){
     return Math.min(...z.anchors.map(a => a.t));
   }
 
+  // ── Wyckoff phase + Creek/Ice channel ───────────────────────────────────
+  _wyckoffToDraw = null;
+  if (showWyckoff && !presentMode) {
+    const wkOut = currentPrimitives['wyckoff_phase'];
+    const wkPrim = (wkOut?.primitives || []).find(p => p.kind === 'wyckoff_phase');
+    if (wkPrim) {
+      const f = wkPrim.factors || {};
+      _wyckoffToDraw = {
+        phase:   f.phase,
+        context: f.context,
+        events:  f.events || [],
+        channel: f.channel || null,
+      };
+    }
+  }
+
   // ── Candle psychology → canvas-overlay list ─────────────────────────────
   _candlePsychToDraw.length = 0;
   if (showCandlePsych && !presentMode) {
@@ -3461,6 +3581,9 @@ bindToggle('t-traps',
 bindToggle('t-candle-psych',
   () => { showCandlePsych = true;  applyImportanceFilterAndRender(); },
   () => { showCandlePsych = false; applyImportanceFilterAndRender(); });
+bindToggle('t-wyckoff',
+  () => { showWyckoff = true;  applyImportanceFilterAndRender(); },
+  () => { showWyckoff = false; applyImportanceFilterAndRender(); });
 bindToggle('t-trendlines',
   () => { showTrendlines  = true;  applyImportanceFilterAndRender(); },
   () => { showTrendlines  = false; applyImportanceFilterAndRender(); });
