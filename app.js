@@ -146,6 +146,7 @@ for (let i = 0; i < PRIOR_FIB_SERIES_COUNT; i++) {
 let _srZonesToDraw = [];
 let _orderBlocksToDraw = [];
 let _sweepsToDraw = [];
+let _trapsToDraw = [];
 let overlayCanvas = null;
 let overlayCtx = null;
 let _chartHost = null;
@@ -398,6 +399,61 @@ function _drawLiquiditySweepsOverlay() {
   }
 }
 
+// Trap markers — X-mark at the failure bar + dashed line back to the failed
+// BOS level. bull_trap = red (failed bullish breakout); bear_trap = green
+// (failed bearish breakdown). Qualified traps (RVOL≥1.5) get a TRAP badge.
+function _drawTrapsOverlay() {
+  if (!overlayCanvas || !overlayCtx) return;
+  if (!_trapsToDraw.length) return;
+  const ts = chart.timeScale();
+
+  for (const t of _trapsToDraw) {
+    const x = ts.timeToCoordinate(t.failure_bar_t);
+    const y = candle.priceToCoordinate(t.failure_close);
+    if (x === null || y === null) continue;
+    const bull = (t.direction === 'bull_trap');
+    const alpha = t.qualified ? 0.95 : 0.55;
+    const color = bull ? `rgba(239, 68, 68, ${alpha})` : `rgba(34, 197, 94, ${alpha})`;
+
+    // Dashed connector from BOS bar to failure bar at the BOS level price
+    if (t.bos_event_t && t.bos_level != null) {
+      const xb = ts.timeToCoordinate(t.bos_event_t);
+      const yb = candle.priceToCoordinate(t.bos_level);
+      if (xb !== null && yb !== null) {
+        overlayCtx.strokeStyle = color;
+        overlayCtx.lineWidth = t.qualified ? 1.4 : 1;
+        overlayCtx.setLineDash([3, 3]);
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(xb, yb); overlayCtx.lineTo(x, yb);
+        overlayCtx.stroke();
+        overlayCtx.setLineDash([]);
+      }
+    }
+
+    // X-mark at the failure bar (color-coded)
+    const sz = t.qualified ? 7 : 5;
+    overlayCtx.strokeStyle = color;
+    overlayCtx.lineWidth = t.qualified ? 2.2 : 1.5;
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(x - sz, y - sz); overlayCtx.lineTo(x + sz, y + sz);
+    overlayCtx.moveTo(x - sz, y + sz); overlayCtx.lineTo(x + sz, y - sz);
+    overlayCtx.stroke();
+
+    // TRAP badge for qualified ones (RVOL≥1.5)
+    if (t.qualified) {
+      const label = bull ? 'BULL TRAP' : 'BEAR TRAP';
+      overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
+      overlayCtx.textAlign = 'center';
+      overlayCtx.textBaseline = bull ? 'top' : 'bottom';
+      const ly = bull ? y + sz + 4 : y - sz - 4;
+      overlayCtx.fillStyle = 'rgba(0,0,0,0.7)';
+      overlayCtx.fillText(label, x + 1, ly + 1);
+      overlayCtx.fillStyle = color;
+      overlayCtx.fillText(label, x, ly);
+    }
+  }
+}
+
 function _drawSRZoneOverlay() {
   if (!overlayCanvas || !overlayCtx) return;
   const w = overlayCanvas.width / (window.devicePixelRatio || 1);
@@ -415,6 +471,8 @@ function _drawSRZoneOverlay() {
   _drawOrderBlocksOverlay();
   // Liquidity sweeps — triangle markers at wick tips; Spring/UTAD get badge labels.
   _drawLiquiditySweepsOverlay();
+  // Traps — X-mark at the failure bar + dashed connector to the failed BOS level.
+  _drawTrapsOverlay();
   // (fib overlay moved to AFTER the zone loop — see end of function — so fib lines
   // and labels render on TOP of zone fillRects instead of being covered by them.)
   if (!_srZonesToDraw.length) { _drawFibsOverlay(); return; }
@@ -654,6 +712,7 @@ let showNews        = true;       // News badges on candles ON by default per pr
 let showSRZones     = true;       // FOCUS: the ONLY structural layer on the chart
 let showOrderBlocks = true;       // OB rectangles — bullish_ob/bearish_ob (Step-1 brain L1)
 let showLiquiditySweeps = true;   // Sweep markers — sweep_low/sweep_high + Spring/UTAD (Step-1)
+let showTraps = true;             // Trap markers — bull_trap/bear_trap (failed BOS, Step-1)
 let showFibs        = true;
 let showTrendlines  = true;
 let showZigzagMajor = false;
@@ -2775,6 +2834,24 @@ function applyImportanceFilterAndRender(){
     return Math.min(...z.anchors.map(a => a.t));
   }
 
+  // ── Traps → canvas-overlay list ─────────────────────────────────────────
+  _trapsToDraw.length = 0;
+  if (showTraps && !presentMode) {
+    const trOut = currentPrimitives['trap'];
+    const trPrims = (trOut?.primitives || []).filter(p => p.kind === 'trap');
+    for (const p of trPrims) {
+      const f = p.factors || {};
+      _trapsToDraw.push({
+        failure_bar_t:  f.failure_bar_t,
+        failure_close:  f.failure_close,
+        bos_event_t:    f.bos_event_t,
+        bos_level:      f.bos_level,
+        direction:      f.direction,
+        qualified:      !!f.meets_rvol_gate,
+      });
+    }
+  }
+
   // ── Liquidity sweeps → canvas-overlay list ──────────────────────────────
   // Recent sweeps with reclaim. Spring/UTAD get bigger markers + labels.
   _sweepsToDraw.length = 0;
@@ -3312,6 +3389,9 @@ bindToggle('t-order-blocks',
 bindToggle('t-liquidity-sweeps',
   () => { showLiquiditySweeps = true;  applyImportanceFilterAndRender(); },
   () => { showLiquiditySweeps = false; applyImportanceFilterAndRender(); });
+bindToggle('t-traps',
+  () => { showTraps = true;  applyImportanceFilterAndRender(); },
+  () => { showTraps = false; applyImportanceFilterAndRender(); });
 bindToggle('t-trendlines',
   () => { showTrendlines  = true;  applyImportanceFilterAndRender(); },
   () => { showTrendlines  = false; applyImportanceFilterAndRender(); });
