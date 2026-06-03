@@ -369,6 +369,76 @@ function smaSeries(bars, len){
 function fmt(n){ return n>=1e7 ? (n/1e7).toFixed(2)+'Cr' : n>=1e5 ? (n/1e5).toFixed(2)+'L' : n>=1e3 ? (n/1e3).toFixed(1)+'k' : ''+n; }
 function epochToISO(t){ return new Date(t*1000).toISOString().slice(0,10); }
 
+// Nexus-style metadata bar — company name + price + sector + market cap chips.
+// Called twice per symbol load: first with empty metadata (right after OHLCV
+// arrives, before primitives), then re-rendered from buildSymheadFromMetadata
+// once the stock_metadata producer's output is fetched.
+function _renderSymhead(m) {
+  if (!symhead) return;
+  const up = (m.change || 0) >= 0;
+  const sign = up ? '▲' : '▼';
+  const sCls = up ? 'up' : 'down';
+  const mcap = (typeof m.market_cap_cr === 'number')
+    ? (m.market_cap_cr >= 100000
+        ? `₹${(m.market_cap_cr / 100000).toFixed(2)}L Cr`   // lakh cr
+        : `₹${m.market_cap_cr.toLocaleString('en-IN', {maximumFractionDigits: 0})} Cr`)
+    : null;
+  const avgVol = (typeof m.avg_volume_10d === 'number')
+    ? (m.avg_volume_10d >= 100 ? `${m.avg_volume_10d.toFixed(0)} L` : `${m.avg_volume_10d.toFixed(1)} L`)
+    : null;
+  // Layout: Title row (company name + symbol) | Price block | Stats chips
+  let html = '<div class="sym-title-row">';
+  html += `<div class="sym-title">`;
+  if (m.company_name) html += `<div class="sym-company">${_esc(m.company_name)}</div>`;
+  html += `<div class="sym-ticker">${_esc(m.symbol)}<span class="sym-ex">NSE</span></div>`;
+  html += `</div>`;
+  html += `<div class="sym-price-block">`;
+  html += `<div class="sym-last">${(m.last_close || 0).toFixed(2)}</div>`;
+  html += `<div class="sym-chg ${sCls}">${sign} ${Math.abs(m.change || 0).toFixed(2)} <span>(${(m.change_pct || 0).toFixed(2)}%)</span></div>`;
+  html += `</div>`;
+  html += '</div>';
+  // Chip row: industry, sector, market cap, avg volume, beta, last bar date
+  html += '<div class="sym-chips">';
+  if (m.industry) html += `<div class="sym-chip"><span class="chip-k">INDUSTRY</span><span class="chip-v">${_esc(m.industry)}</span></div>`;
+  if (m.sector)   html += `<div class="sym-chip"><span class="chip-k">SECTOR</span><span class="chip-v">${_esc(m.sector)}</span></div>`;
+  if (mcap)       html += `<div class="sym-chip"><span class="chip-k">MARKET CAP</span><span class="chip-v">${mcap}</span></div>`;
+  if (avgVol)    html += `<div class="sym-chip"><span class="chip-k">AVG VOL (10D)</span><span class="chip-v">${avgVol}</span></div>`;
+  if (typeof m.beta === 'number')
+                  html += `<div class="sym-chip"><span class="chip-k">β</span><span class="chip-v">${m.beta.toFixed(2)}</span></div>`;
+  if (m.last_bar_iso) html += `<div class="sym-chip"><span class="chip-k">LAST BAR</span><span class="chip-v">${m.last_bar_iso}</span></div>`;
+  html += '</div>';
+  symhead.innerHTML = html;
+}
+
+// Re-render the symhead once primitives are loaded (stock_metadata may be there).
+function _refreshSymheadFromMetadata(outputs) {
+  if (!currentBars || !currentBars.length) return;
+  const last = currentBars[currentBars.length - 1];
+  const prev = currentBars[currentBars.length - 2] || last;
+  const chg = last.close - prev.close;
+  const chgPct = (chg / (prev.close || 1)) * 100;
+  const hi52 = Math.max(...currentBars.map(b => b.high));
+  const lo52 = Math.min(...currentBars.map(b => b.low));
+  const mFacts = outputs?.stock_metadata?.facts || {};
+  _renderSymhead({
+    symbol: currentSymbol || '',
+    company_name:    mFacts.company_name || '',
+    industry:        mFacts.industry || '',
+    sector:          mFacts.sector || '',
+    market_cap_cr:   mFacts.market_cap_cr,
+    avg_volume_10d:  mFacts.avg_volume_10d,
+    beta:            mFacts.beta,
+    last_close:      last.close,
+    change:          chg,
+    change_pct:      chgPct,
+    period_high:     hi52,
+    period_low:      lo52,
+    last_bar_iso:    epochToISO(last.time),
+    volume:          last.volume,
+    bars_count:      currentBars.length,
+  });
+}
+
 // ---- state ----
 let currentBars = [];
 let currentSymbol = null;
@@ -1463,8 +1533,32 @@ function buildDashboardPanel(symbol, bars, outputs) {
     html += `</div>`;
   }
 
+  // ── Placeholder cards for upcoming phases (user request 2026-06-03) ──
+  // Surfaces where Phase-2/Phase-8 work will land so the layout doesn't feel
+  // empty + signals intent. Each card grays-out + carries a "soon" badge.
+  html += `<div class="dash-row dash-placeholder-row"><div class="dash-key">UPCOMING — PHASE 2</div>`;
+  html += `<div class="placeholder-grid">`;
+  html += _placeholderCard('Sentiment Gauge',  'Aggregate news + social sentiment trajectory', 'Phase 2');
+  html += _placeholderCard('News Impact Map',  'Per-category impact score (earnings / macro / sector)', 'Phase 2');
+  html += _placeholderCard('Correlation Panel', 'Rolling correlation vs sector + market indices', 'Phase 2');
+  html += _placeholderCard('Earnings Calendar', 'Next results dates + analyst expectations', 'Phase 2');
+  html += `</div></div>`;
+
+  html += `<div class="dash-row dash-placeholder-row"><div class="dash-key">UPCOMING — PHASE 8 (VALIDATION GATE)</div>`;
+  html += `<div class="placeholder-grid">`;
+  html += _placeholderCard('Setup Calibration', 'Per-setup historical hit rate from journal', 'Phase 8');
+  html += _placeholderCard('Confidence Calibration', 'Predicted vs actual outcome buckets', 'Phase 8');
+  html += `</div></div>`;
+
   html += `<div class="dash-disclaimer">DECISION SUPPORT TOOL. NOT FINANCIAL ADVICE. TRADE AT YOUR OWN RISK.</div>`;
   return html;
+}
+
+function _placeholderCard(title, desc, phase) {
+  return `<div class="ph-card">
+    <div class="ph-title">${_esc(title)}<span class="ph-badge">${_esc(phase)}</span></div>
+    <div class="ph-desc">${_esc(desc)}</div>
+  </div>`;
 }
 
 function showSelectedPrimitive(entries){
@@ -1513,20 +1607,29 @@ async function loadSymbol(sym){
 
   showStatus('live', `live · ${bars.length} bars`);
 
-  // header
+  // header — initial render before primitives load (re-rendered later with metadata
+  // once stock_metadata producer's output is fetched in loadPrimitivesForCurrent).
   const last = bars[bars.length-1], prev = bars[bars.length-2] || last;
   const chg = last.close - prev.close, chgPct = (chg/prev.close*100);
   const hi52 = Math.max(...bars.map(b=>b.high)), lo52 = Math.min(...bars.map(b=>b.low));
   const up = chg >= 0;
-  symhead.innerHTML =
-    `<span class="ticker">${sym}</span>` +
-    `<span class="last">${last.close.toFixed(2)}</span>` +
-    `<span class="chg ${up?'up':'down'}">${up?'▲':'▼'} ${chg.toFixed(2)} (${chgPct.toFixed(2)}%)</span>` +
-    `<span class="stat">Last bar <b>${epochToISO(last.time)}</b></span>` +
-    `<span class="stat">Period H <b>${hi52.toFixed(2)}</b></span>` +
-    `<span class="stat">Period L <b>${lo52.toFixed(2)}</b></span>` +
-    `<span class="stat">Vol <b>${fmt(last.volume)}</b></span>` +
-    `<span class="stat">Bars <b>${bars.length}</b></span>`;
+  _renderSymhead({
+    symbol: sym,
+    company_name: '',   // metadata not loaded yet
+    industry: '',
+    sector: '',
+    market_cap_cr: null,
+    avg_volume_10d: null,
+    beta: null,
+    last_close: last.close,
+    change: chg,
+    change_pct: chgPct,
+    period_high: hi52,
+    period_low: lo52,
+    last_bar_iso: epochToISO(last.time),
+    volume: last.volume,
+    bars_count: bars.length,
+  });
 
   placeholder.style.display = 'none';
   placeholder.className = 'placeholder';
@@ -2032,6 +2135,8 @@ function applyImportanceFilterAndRender(){
     showStatus('live', `live · ${bars} bars`);
   }
 
+  // Refresh symhead with metadata-rich header (consumes stock_metadata producer)
+  _refreshSymheadFromMetadata(currentPrimitives);
   // Context box — dynamic prose summary from producer outputs (P3-1 doc §6)
   updateContextBox(currentPrimitives);
   // State banner — top-of-chart concat of structure + lifecycle + position + verdict

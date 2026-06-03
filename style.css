@@ -63,20 +63,68 @@ body{
 .status.live .dotled{background:var(--up)}
 .status.error .dotled{background:var(--down)}
 
-/* ---- symbol header ---- */
+/* ---- Nexus-style symbol header (2026-06-03 redesign) ----
+   Two-row metadata bar: title row (company + symbol + price) above a chip row
+   (industry / sector / market cap / avg vol / beta / last bar date). */
 .symhead{
-  flex:0 0 auto; display:flex; align-items:baseline; gap:18px; flex-wrap:wrap;
-  padding:12px 18px; border-bottom:1px solid var(--line); background:var(--panel);
-  min-height:52px;
+  flex:0 0 auto; display:flex; flex-direction:column; gap:8px;
+  padding:14px 22px 12px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, #131720 0%, #0e1117 100%);
+  min-height:auto;
 }
-.symhead .ticker{font-size:22px; font-weight:600; letter-spacing:1px; color:var(--text)}
-.symhead .last{font-size:18px; font-weight:500}
-.symhead .chg{font-size:13px; font-weight:500}
-.symhead .chg.up{color:var(--up)} .symhead .chg.down{color:var(--down)}
-.symhead .stat{font-size:11.5px; color:var(--dim)}
-.symhead .stat b{color:var(--text); font-weight:500}
-.symhead .empty{color:var(--dimmer); font-size:13px; letter-spacing:.5px}
-.symhead .err{color:var(--down); font-size:13px; letter-spacing:.5px}
+.symhead .empty{color:var(--dimmer); font-size:13px; letter-spacing:.5px; padding:6px 0;}
+.symhead .err{color:var(--down); font-size:13px; letter-spacing:.5px; padding:6px 0;}
+
+.sym-title-row{display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap;}
+.sym-title{display:flex; flex-direction:column; gap:2px; min-width:0;}
+.sym-company{
+  font-family:var(--sans); font-weight:700; font-size:22px;
+  color:#f0f3f8; letter-spacing:-0.3px; line-height:1.1;
+}
+.sym-ticker{
+  font-family:var(--mono); font-weight:600; font-size:12px;
+  color:#7d8390; letter-spacing:1.5px;
+  display:flex; gap:8px; align-items:baseline;
+}
+.sym-ticker .sym-ex{
+  font-size:9px; padding:2px 5px; border-radius:2px;
+  background:rgba(255,255,255,0.05); color:#9099a8;
+  font-weight:700; letter-spacing:1px;
+}
+.sym-price-block{display:flex; align-items:baseline; gap:14px; margin-left:auto;}
+.sym-last{
+  font-family:var(--mono); font-weight:700; font-size:30px;
+  color:#f0f3f8; letter-spacing:-0.5px; line-height:1.0;
+}
+.sym-chg{
+  font-family:var(--sans); font-weight:600; font-size:14px;
+  letter-spacing:0.2px;
+}
+.sym-chg.up{ color:var(--up); }
+.sym-chg.down{ color:var(--down); }
+.sym-chg span{ opacity:0.75; font-size:12px; }
+
+/* Chip row */
+.sym-chips{
+  display:flex; flex-wrap:wrap; gap:6px;
+  padding-top:2px;
+}
+.sym-chip{
+  display:flex; align-items:center; gap:6px;
+  padding:5px 9px;
+  background:rgba(255,255,255,0.025);
+  border:1px solid rgba(255,255,255,0.04);
+  border-radius:4px;
+  font-size:10.5px;
+}
+.sym-chip .chip-k{
+  color:#6b7280; font-family:var(--sans); font-weight:700;
+  letter-spacing:1.2px; text-transform:uppercase; font-size:9px;
+}
+.sym-chip .chip-v{
+  color:#cbd0d8; font-family:var(--mono); font-weight:600;
+  font-size:11px;
+}
 
 /* ---- controls ---- */
 .controls{
@@ -408,6 +456,44 @@ body{
 .fr-row .fr-here-tag{ font-size:9px; font-weight:700; color:#f0c850; margin-left:auto; }
 .fr-row.fr-golden .fr-ratio{ color:#c8a0ff; }
 .fr-row.fr-endpoint .fr-ratio{ color:#ffffff; }
+
+/* Placeholder cards for upcoming Phase-2 / Phase-8 features */
+.dash-placeholder-row{
+  border-top:1px dashed rgba(255,255,255,0.06);
+  padding-top:14px;
+  margin-top:10px;
+}
+.placeholder-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+  gap:6px;
+}
+.ph-card{
+  padding:9px 10px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.018) 0%, rgba(255,255,255,0.005) 100%);
+  border:1px solid rgba(255,255,255,0.04);
+  border-radius:5px;
+  opacity:0.65;
+  transition:opacity 0.15s;
+}
+.ph-card:hover{ opacity:0.85; }
+.ph-title{
+  font-family:var(--sans); font-size:11px; font-weight:600;
+  color:#cbd0d8; letter-spacing:0.2px;
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  margin-bottom:3px;
+}
+.ph-badge{
+  font-size:8.5px; font-weight:700; letter-spacing:1px;
+  padding:2px 5px; border-radius:2px;
+  background:rgba(245,200,90,0.10);
+  color:#f5c85a;
+  text-transform:uppercase;
+}
+.ph-desc{
+  font-family:var(--sans); font-size:10px; color:#7d8390;
+  line-height:1.4;
+}
 
 .dash-disclaimer{
   margin-top:14px; padding:8px 10px;
