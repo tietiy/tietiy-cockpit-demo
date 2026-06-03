@@ -1,7 +1,15 @@
 :root{
-  --bg:#0b0d10; --panel:#111418; --panel-2:#161a1f; --line:#23272e;
-  --text:#c9ccd1; --dim:#6b7280; --dimmer:#454b54;
-  --gold:#d9a94e; --up:#3fb27f; --down:#e2574c;
+  /* Background tiers — lifted from the "dead" pure-black previous palette to a
+     warmer blue-charcoal that reads less stressful (especially under daylight
+     + on phones with HDR-but-aggressive contrast). 2026-06-03 polish pass. */
+  --bg:#0e1218; --panel:#161b22; --panel-2:#1c222b; --line:#272d36;
+  --text:#dde1e8; --dim:#7a8290; --dimmer:#525a66;
+  /* Semantic colors — keep red/green for industry-standard candle conventions
+     but supplement WITH geometric markers (▲/▼/■) wherever the UI relies on
+     status. Blue + orange added as secondary accents for color-blind operators
+     (deutan / protan see these distinctly even when red/green muddle). */
+  --gold:#e8b85a; --up:#4fc88f; --down:#ed6960;
+  --accent-blue:#5cb0ed; --accent-orange:#f59f4c;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
   --serif:'Fraunces',Georgia,serif;
   /* Inter for sans-serif content (2026-06-03 typography pass) — replaces the
@@ -12,8 +20,12 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
-  background:var(--bg); color:var(--text); font-family:var(--sans);
-  font-size:13px; display:flex; flex-direction:column; overflow:hidden;
+  /* Subtle vertical gradient — adds depth without overwhelming. */
+  background:linear-gradient(180deg, #11161e 0%, #0e1218 100%);
+  background-attachment:fixed;
+  color:var(--text); font-family:var(--sans);
+  font-size:14px;                          /* base bumped 13→14 for legibility */
+  display:flex; flex-direction:column; overflow:hidden;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
 }
@@ -158,19 +170,22 @@ body{
 
 /* ---- State banner (top of chart, descriptive concat of state-tags + verdict) ---- */
 .state-banner{
-  position:absolute; top:8px; left:16px; right:16px; z-index:11;
-  padding:8px 16px;
-  background:linear-gradient(180deg, rgba(20,22,28,0.92) 0%, rgba(16,18,24,0.86) 100%);
-  backdrop-filter:blur(8px);
-  border:1px solid rgba(255,255,255,0.07);
-  border-radius:6px;
-  font-family:var(--sans); font-size:11px; font-weight:700;
-  letter-spacing:1.4px;
-  color:#e0e6ee;
+  /* Sit BELOW the chart's price-axis-overlay area — was top:8 which collided
+     with the LWC #legend OHLC chip. Now bottom-of-chart aligned with high
+     z-index so it floats above candles cleanly. 2026-06-03 fix. */
+  position:absolute; top:12px; left:16px; right:16px; z-index:14;
+  padding:10px 18px;
+  background:linear-gradient(180deg, rgba(28,34,43,0.92) 0%, rgba(22,27,34,0.86) 100%);
+  backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:8px;
+  font-family:var(--sans); font-size:12px; font-weight:700;
+  letter-spacing:1.6px;
+  color:#e8ebf0;
   pointer-events:none;
   text-align:center;
   text-transform:uppercase;
-  box-shadow:0 4px 16px rgba(0,0,0,0.3);
+  box-shadow:0 6px 20px rgba(0,0,0,0.4);
 }
 .state-banner .sb-sep{ color:rgba(255,255,255,0.18); margin:0 12px; }
 .state-banner .sb-verdict{ color:#f5c85a; font-weight:800; letter-spacing:1.6px; }
@@ -248,6 +263,18 @@ body{
 .dd-divider{height:1px; background:var(--line); margin:4px 0}
 
 /* ---- Context box (the dynamic "current situation" prose) ---- */
+/* Section headers — group the dashboard rows into Core Read / Structure & Location
+   / Context / Levels / Upcoming so the trader-eye reads top-down. 2026-06-03. */
+.dash-section-head{
+  font-family:var(--sans); font-size:10px; font-weight:700;
+  letter-spacing:2px; text-transform:uppercase;
+  color:#525a66;
+  padding:14px 0 6px;
+  margin-top:6px;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.dash-section-head:first-child{ padding-top:0; margin-top:0; }
+
 /* ---- TIE TIY ANALYSIS dashboard panel — Nexus-style visual pass 2026-06-03 ----
    Card-based density. Two visual tiers:
      headline rows (STRUCTURE STATE, DECISION) → larger, no card background
@@ -260,16 +287,16 @@ body{
 }
 .dash-row:last-of-type{ border-bottom:none; }
 .dash-key{
-  font-size:9.5px; font-weight:700; letter-spacing:1.6px;
-  color:#6b7280; text-transform:uppercase; margin-bottom:7px;
+  font-size:10.5px; font-weight:700; letter-spacing:1.5px;
+  color:#7a8290; text-transform:uppercase; margin-bottom:8px;
   font-family:var(--sans);
 }
 .dash-val{
-  font-size:20px; font-weight:700; color:#f0f3f8;
+  font-size:22px; font-weight:700; color:#f0f3f8;
   font-family:var(--sans); letter-spacing:-0.3px;
-  line-height:1.1;
+  line-height:1.15;
   position:relative;
-  padding-left:10px;
+  padding-left:12px;
 }
 /* Left accent strip per status — gold/green/red/grey */
 .dash-val::before{
@@ -303,11 +330,11 @@ body{
   margin-bottom:10px;
 }
 .dash-score-row .dash-score-num{
-  font-family:var(--mono); font-weight:700; font-size:34px;
-  color:#f0f3f8; letter-spacing:-0.5px;
+  font-family:var(--mono); font-weight:700; font-size:38px;
+  color:#f0f3f8; letter-spacing:-0.6px;
 }
 .dash-score-row .dash-score-max{
-  font-family:var(--mono); font-size:14px; color:#454b54; font-weight:500;
+  font-family:var(--mono); font-size:15px; color:#525a66; font-weight:500;
 }
 .dash-score-row .dash-score-in{
   margin-left:auto;
@@ -376,7 +403,7 @@ body{
 }
 
 .dash-text{
-  font-size:13px; color:#cbd0d8; line-height:1.55;
+  font-size:14px; color:#dde1e8; line-height:1.55;
   font-family:var(--sans); font-weight:500;
 }
 

@@ -1397,6 +1397,8 @@ function buildDashboardPanel(symbol, bars, outputs) {
   }
 
   let html = '';
+  // ── CORE READ — first-glance state + decision ──
+  html += `<div class="dash-section-head">Core Read</div>`;
   html += `<div class="dash-row"><div class="dash-key">STRUCTURE STATE</div><div class="dash-val val-warn">${_esc(structureStateText)}</div></div>`;
   html += `<div class="dash-row"><div class="dash-key">DECISION</div><div class="dash-val ${decisionClass}">${_esc(decision)}</div></div>`;
 
@@ -1412,9 +1414,13 @@ function buildDashboardPanel(symbol, bars, outputs) {
   html += _breakdownChips(dcBreakdown, 25);
   html += `</div>`;
 
+  // ── STRUCTURE & LOCATION ──
+  html += `<div class="dash-section-head">Structure & Location</div>`;
   html += `<div class="dash-row"><div class="dash-key">ACTIVE STRUCTURE</div><div class="dash-text">${_esc(activeStructure)}</div></div>`;
   html += `<div class="dash-row"><div class="dash-key">PRICE LOCATION</div><div class="dash-text">${_esc(priceLocation)}</div></div>`;
 
+  // ── CONTEXT — RS / regime / event-risk ──
+  html += `<div class="dash-section-head">Context</div>`;
   // RELATIVE STRENGTH row — stock vs NIFTY500 over 10/20/50 days (doc PART 15).
   const rsFacts = outputs.relative_strength?.facts || null;
   if (rsFacts && rsFacts.rs_classification) {
@@ -1633,7 +1639,10 @@ async function loadSymbol(sym){
 
   placeholder.style.display = 'none';
   placeholder.className = 'placeholder';
-  legend.style.display = 'block';
+  // Suppress LWC's crosshair OHLC overlay (#legend) — was overlapping the state
+  // banner at the top of the chart, and we already surface current OHLC in the
+  // metadata header (2026-06-03 fix).
+  legend.style.display = 'none';
 
   await loadPrimitivesForCurrent();
   // Final step: apply default zoom AFTER all series (candle/vol/SMA/zigzag) are populated.
