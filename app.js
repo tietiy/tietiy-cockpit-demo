@@ -1069,6 +1069,7 @@ function _renderDock() {
     levels:   _renderLevelsTab,
     plans:    _renderPlansTab,
     news:     _renderNewsTab,
+    fibs:     _renderFibsTab,
     volume:   _renderVolumeTab,
     relative: _renderRelativeTab,
     setup:    _renderSetupTab,
@@ -1076,6 +1077,12 @@ function _renderDock() {
   };
   const fn = RENDERERS[_currentDockTab] || _renderLevelsTab;
   dockBody.innerHTML = fn(outputs, currentBars);
+
+  // Tabs that need post-injection canvas drawing
+  if (_currentDockTab === 'fibs') {
+    // Defer to next tick so the canvas exists in DOM before draw
+    requestAnimationFrame(() => _drawFibMiniChart(outputs));
+  }
 }
 
 // ─── Tab renderers ──────────────────────────────────────────────────────────
@@ -1187,15 +1194,27 @@ function _renderPlansTab(outputs, bars) {
   }</div>`;
 }
 
+const _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _fmtNewsDate(t) {
+  const d = new Date(t * 1000);
+  return `${_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+// Currently displayed news items keyed by epoch — used by the modal to look back
+// to the full body when a card is clicked.
+const _newsItemsByT = new Map();
+
 function _renderNewsTab(outputs, bars) {
   const news = (outputs.news_marker?.primitives || []).filter(p => p.kind === 'news_marker');
   if (!news.length) {
     return `<div class="dock-empty">No news for this symbol on this PIT date.</div>`;
   }
   const sorted = news.slice().sort((a, b) => b.anchors[0].t - a.anchors[0].t);
+  _newsItemsByT.clear();
   const cards = sorted.map(p => {
     const f = p.factors || {};
-    const date = new Date(p.anchors[0].t * 1000).toISOString().slice(5, 10);
+    _newsItemsByT.set(String(p.anchors[0].t), p);
+    const date = _fmtNewsDate(p.anchors[0].t);
     const cat = (f.category || 'company').toLowerCase();
     const impact = (f.impact || 'medium').toLowerCase();
     const sent = (f.sentiment || 'neutral').toLowerCase();
@@ -1205,16 +1224,116 @@ function _renderNewsTab(outputs, bars) {
                 <span class="nc-cat-dot ${_esc(cat)}"></span>
                 <span class="nc-cat">${_esc(cat)}</span>
                 <span class="nc-date">${_esc(date)}</span>
-                ${impact === 'high' ? `<span class="nc-impact-high">HIGH IMPACT</span>` : ''}
+                ${impact === 'high' ? `<span class="nc-impact-high">HIGH</span>` : ''}
               </div>
               <div class="nc-headline">${_esc(f.headline || '')}</div>
               <div class="nc-footer">
                 <span class="nc-sent ${_esc(sent)}">${_esc(sent.toUpperCase())}</span>
                 ${conf ? `<span>·</span><span class="nc-conf ${_esc(conf)}">${_esc(conf.toUpperCase())}</span>` : ''}
+                <span class="nc-read-cta">Read →</span>
               </div>
             </div>`;
   }).join('');
   return `<div class="news-grid">${cards}</div>`;
+}
+
+// ─── News modal — click a card to expand the full body ────────────────────
+function _openNewsModal(t) {
+  const p = _newsItemsByT.get(String(t));
+  if (!p) return;
+  const f = p.factors || {};
+  const date = _fmtNewsDate(p.anchors[0].t);
+  const cat = (f.category || 'company').toLowerCase();
+  const impact = (f.impact || 'medium').toLowerCase();
+  const sent = (f.sentiment || 'neutral').toLowerCase();
+  const conf = f.price_confirmation && f.price_confirmation !== 'n/a' ? f.price_confirmation : null;
+  const body = f.body || f.summary || f.headline || '';
+  const link = f.url || f.link || null;
+  const overlay = document.createElement('div');
+  overlay.className = 'news-modal-overlay';
+  overlay.innerHTML = `
+    <div class="news-modal" role="dialog" aria-modal="true">
+      <button class="nm-close" aria-label="Close">×</button>
+      <div class="nm-meta">
+        <span class="nc-cat-dot ${_esc(cat)}"></span>
+        <span class="nm-cat">${_esc(cat.toUpperCase())}</span>
+        <span class="nm-sep">·</span>
+        <span class="nm-date">${_esc(date)}</span>
+        ${impact === 'high' ? `<span class="nm-impact">HIGH IMPACT</span>` : ''}
+      </div>
+      <h2 class="nm-headline">${_esc(f.headline || '')}</h2>
+      <div class="nm-body">${_esc(body)}</div>
+      <div class="nm-footer">
+        <span class="nc-sent ${_esc(sent)}">${_esc(sent.toUpperCase())}</span>
+        ${conf ? `<span class="nm-sep">·</span><span class="nc-conf ${_esc(conf)}">${_esc(conf.toUpperCase())}</span>` : ''}
+        ${link ? `<a class="nm-link" href="${_esc(link)}" target="_blank" rel="noopener">Open source ↗</a>` : ''}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('.nm-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+  });
+}
+
+// Delegate clicks on news cards → open modal
+document.addEventListener('click', e => {
+  const card = e.target.closest && e.target.closest('.news-card');
+  if (card && card.dataset && card.dataset.t) _openNewsModal(card.dataset.t);
+});
+
+function _renderFibsTab(outputs, bars) {
+  const chochP = (typeof _chochTriggerPrice === 'number') ? _chochTriggerPrice : null;
+  const chochT = (typeof _chochTriggerT === 'number') ? _chochTriggerT : null;
+  if (chochP === null || chochT === null || !bars || !bars.length) {
+    return `<div class="dock-empty">No active fib swing — needs a CHoCH trigger + bars</div>`;
+  }
+  const trendState = outputs.structure_label?.facts?.trend_state || 'TRANSITIONAL';
+  const after = bars.filter(b => b.time >= chochT);
+  if (!after.length) return `<div class="dock-empty">No bars after CHoCH yet</div>`;
+  let swingHigh, swingLow, swingHighT, swingLowT;
+  if (trendState === 'BEAR') {
+    const lowBar = after.reduce((m, b) => b.low < m.low ? b : m, after[0]);
+    swingHigh = chochP;     swingHighT = chochT;
+    swingLow  = lowBar.low; swingLowT  = lowBar.time;
+  } else {
+    const highBar = after.reduce((m, b) => b.high > m.high ? b : m, after[0]);
+    swingHigh = highBar.high; swingHighT = highBar.time;
+    swingLow  = chochP;       swingLowT  = chochT;
+  }
+  const dt = (t) => {
+    const d = new Date(t * 1000);
+    return `${_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  };
+  return `
+    <div class="fibs-tab">
+      <div class="fmc-anchors">
+        <div class="fmc-anchor">
+          <div class="fmc-lbl">Swing High</div>
+          <div class="fmc-val">₹${swingHigh.toFixed(2)}</div>
+          <div class="fmc-date">${dt(swingHighT)}</div>
+        </div>
+        <div class="fmc-anchor">
+          <div class="fmc-lbl">Swing Low</div>
+          <div class="fmc-val">₹${swingLow.toFixed(2)}</div>
+          <div class="fmc-date">${dt(swingLowT)}</div>
+        </div>
+        <div class="fmc-anchor">
+          <div class="fmc-lbl">Range</div>
+          <div class="fmc-val">${(swingHigh - swingLow).toFixed(2)}</div>
+          <div class="fmc-date">${((swingHigh - swingLow) / swingLow * 100).toFixed(1)}%</div>
+        </div>
+        <div class="fmc-anchor">
+          <div class="fmc-lbl">Direction</div>
+          <div class="fmc-val">${trendState === 'BEAR' ? '↓ retrace ↑' : '↑ retrace ↓'}</div>
+          <div class="fmc-date">${_esc(trendState)}</div>
+        </div>
+      </div>
+      <canvas id="fib-mini-canvas" class="fib-mini-canvas-large"></canvas>
+    </div>
+  `;
 }
 
 function _renderVolumeTab(outputs, bars) {
@@ -1293,6 +1412,21 @@ document.querySelectorAll('.dock-tab').forEach(tab => {
     _dockTabInitDone = true;   // user picked → no more auto-default
     _renderDock();
   });
+});
+
+// ─── Click-outside closes Layers / Producers <details> dropdowns ──────────
+// Native <details> only toggles when its <summary> is clicked. Operators
+// expect a popover-style "click outside to dismiss" — wire that here.
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.dd-menu[open]').forEach(d => {
+    if (!d.contains(e.target)) d.open = false;
+  });
+});
+// ESC also closes them.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.dd-menu[open]').forEach(d => { d.open = false; });
+  }
 });
 
 // ─── Wire cmdbar top-tabs (chart/scanner/etc) — all but chart are stubs ────
