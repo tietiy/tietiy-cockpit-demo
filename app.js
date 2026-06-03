@@ -3642,46 +3642,31 @@ bindToggle('t-wyckoff',
   () => { showWyckoff = true;  applyImportanceFilterAndRender(); },
   () => { showWyckoff = false; applyImportanceFilterAndRender(); });
 
-// ─── Fullscreen-chart button: opens current symbol in a new tab with
-//     ?fullchart=1. Uses a synthesised <a target="_blank"> click rather
-//     than window.open() — Chrome/Safari popup blockers reject the latter
-//     under various conditions; the former is treated as a normal link.
-//     Wired to BOTH buttons (toolbar + top-right always-visible).
-(() => {
-  const openFull = (e) => {
-    const sym = currentSymbol || (new URLSearchParams(location.search)).get('sym') || '';
-    if (!sym) { alert('Load a symbol first'); return; }
-    const u = new URL(location.href);
-    u.searchParams.set('sym', sym);
-    u.searchParams.set('fullchart', '1');
-    const href = u.toString();
-    // Primary path: synthetic <a> click → browsers treat as user-initiated nav
-    try {
-      const a = document.createElement('a');
-      a.href = href;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return;
-    } catch (err) {
-      console.error('[fullchart] anchor click failed:', err);
-    }
-    // Fallback: window.open in case the anchor path was blocked
-    const w = window.open(href, '_blank');
-    if (!w) {
-      // Final fallback: navigate the CURRENT tab to the fullchart URL.
-      // The operator can hit Back to return to the cockpit.
-      console.warn('[fullchart] popup blocked — navigating current tab');
-      location.href = href;
-    }
-  };
+// ─── Fullscreen-chart anchors: real <a target="_blank"> with a dynamic
+//     href. Browsers handle this as native link nav — no popup blockers
+//     in play. We just keep the href in sync with the loaded symbol.
+function _updateFullchartHref() {
+  const sym = currentSymbol || (new URLSearchParams(location.search)).get('sym') || '';
+  // Always keep the link valid (operator can still click before loading a
+  // symbol; in that case open the landing page in a new tab — harmless).
+  const u = new URL(location.href);
+  if (sym) u.searchParams.set('sym', sym);
+  u.searchParams.set('fullchart', '1');
+  const href = u.toString();
   for (const id of ['btn-fullchart', 'btn-fullchart-top']) {
-    const btn = document.getElementById(id);
-    if (btn) btn.addEventListener('click', openFull);
+    const a = document.getElementById(id);
+    if (a) a.setAttribute('href', href);
   }
-})();
+}
+// Wire initial state + an update on every loadSymbol completion. We override
+// loadSymbol so the href always reflects what the operator just opened.
+_updateFullchartHref();
+const _origLoadSymbol = loadSymbol;
+loadSymbol = async function (sym) {
+  const r = await _origLoadSymbol(sym);
+  _updateFullchartHref();
+  return r;
+};
 
 // Apply fullchart-mode class to body when ?fullchart=1 is present.
 // CSS hides hero/banner/rail/dock and expands .chart to fill the viewport.

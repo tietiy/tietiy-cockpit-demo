@@ -515,10 +515,12 @@ body::before {
 .chart { padding: 0; overflow: hidden; }
 #chart { width: 100%; height: 100%; }
 
-/* Always-visible "Full" button at chart top-right (operator-discoverable). */
+/* Always-visible "Full" anchor at chart top-right — works for <a>. */
 .chart-fs-btn {
   position: absolute; top: 8px; right: 12px;
-  z-index: 6;
+  z-index: 7;                                /* above placeholder + chart-toolbar */
+  display: inline-block;
+  text-decoration: none;
   background: rgba(13, 17, 30, 0.92);
   border: 1px solid var(--accent);
   color: var(--accent);
@@ -686,8 +688,10 @@ body.fullchart-mode .chart-fs-btn { display: none; }
   border: 1px solid var(--ink-2);
 }
 
-/* Chart-toolbar buttons (Full, etc.) */
+/* Chart-toolbar buttons (Full, etc.) — works for both <button> and <a> */
 .ct-btn {
+  display: inline-block;
+  text-decoration: none;
   background: rgba(13, 17, 30, 0.94);
   border: 1px solid rgba(124, 134, 158, 0.40);
   color: var(--text);
