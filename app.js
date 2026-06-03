@@ -1176,18 +1176,21 @@ function _tileFibs(outputs, bars) {
 }
 
 function _tileVolume(outputs, bars) {
-  const zones = (outputs.sr_zones?.primitives || []).filter(p => p.kind === 'sr_zone');
-  const supplyZone = zones.find(z => (z.factors?.classification || '').includes('resistance'));
-  const htfDemand  = zones.find(z => z.factors?.htf_confirmed && (z.factors?.classification || '').includes('support'));
-  const pivotZone  = zones.find(z => z.factors?.classification === 'minor_support');
-  const bullets = [];
-  if (supplyZone?.factors?.lifecycle === 'failed_reclaim') bullets.push('Failed-reclaim supply');
-  if (htfDemand) bullets.push('HTF demand confirmed');
-  if (pivotZone?.factors?.lifecycle === 'failed_breakdown') bullets.push('Pivot reclaimed');
-  bullets.push('VP profile: pending');
-  return bullets.slice(0, 4).map(b =>
-    `<div class="dt-row dt-bullet">▸ <span class="dt-clip">${_esc(b)}</span></div>`
-  ).join('');
+  const vs = outputs.volume_state?.facts || {};
+  if (!vs.rvol_regime) return `<div class="dt-dim">volume_state not available</div>`;
+  const regime = vs.rvol_regime;
+  // Map RVOL regime → semantic color: SPIKE/CLIMAX up, DRY down, NORMAL/ELEVATED neutral.
+  const regCls = (regime === 'SPIKE' || regime === 'CLIMAX') ? 'up'
+               : regime === 'DRY' ? 'down'
+               : regime === 'ELEVATED' ? 'warn'
+               : '';
+  const rvol = vs.rvol_current ?? 0;
+  const atv = vs.atv20_crores;
+  const atvCls = vs.atv20_meets_min === false ? 'down' : '';
+  return `<div class="dt-row dt-title up-or-dn-${regCls}">${_esc(regime)} · RVOL ${rvol.toFixed(2)}</div>
+          <div class="dt-row"><span class="dt-k">ATV20</span><span class="dt-v ${atvCls}">₹${(atv ?? 0).toFixed(0)}Cr</span></div>
+          <div class="dt-row"><span class="dt-k">POC</span><span class="dt-v">₹${(vs.vp_poc ?? 0).toFixed(2)}</span></div>
+          <div class="dt-row"><span class="dt-k">VAH/VAL</span><span class="dt-v">${(vs.vp_vah ?? 0).toFixed(0)}–${(vs.vp_val ?? 0).toFixed(0)}</span></div>`;
 }
 
 function _tileSetup(outputs, bars) {
@@ -1525,21 +1528,60 @@ function _renderFibsTab(outputs, bars) {
 }
 
 function _renderVolumeTab(outputs, bars) {
-  const sr = outputs.sr_zones;
-  const zones = (sr?.primitives || []).filter(p => p.kind === 'sr_zone');
-  const supplyZone = zones.find(z => (z.factors?.classification || '').includes('resistance'));
-  const pivotZone  = zones.find(z => z.factors?.classification === 'minor_support');
-  const htfDemand  = zones.find(z => z.factors?.htf_confirmed && (z.factors?.classification || '').includes('support'));
-  const chochP = (typeof _chochTriggerPrice === 'number') ? _chochTriggerPrice : null;
+  const vs = outputs.volume_state?.facts || {};
+  const fullVs = outputs.volume_state?.primitives?.[0]?.factors || {};
+  if (!vs.rvol_regime) {
+    return `<div class="dock-empty">volume_state producer not available for this run</div>`;
+  }
+  const fmtPct = n => typeof n === 'number' ? `${n.toFixed(2)}` : '—';
+  const sparkRows = (fullVs.rvol_history || []).map(r => {
+    const w = Math.min(100, Math.max(8, r * 40));   // 1.0 → 40%, 2.5 → 100%
+    const cls = r >= 2.0 ? 'up' : r >= 1.4 ? 'warn' : r < 0.6 ? 'down' : '';
+    return `<div class="vs-spark-bar"><span class="vs-spark-fill ${cls}" style="width:${w}%"></span><span class="vs-spark-val">${r.toFixed(2)}</span></div>`;
+  }).join('');
 
-  const bullets = [];
-  if (supplyZone && supplyZone.factors?.lifecycle === 'failed_reclaim') bullets.push('Failed-reclaim supply acts as <strong>strong overhead resistance</strong>');
-  if (htfDemand) bullets.push('HTF demand zone (weekly-confirmed) anchors <strong>major support</strong>');
-  if (pivotZone && pivotZone.factors?.lifecycle === 'failed_breakdown') bullets.push('Pivot band was lost then reclaimed — <strong>short-term stabilization</strong>');
-  if (chochP != null) bullets.push(`Close above <strong>${chochP.toFixed(2)}</strong> = trend reversal (CHoCH fires)`);
-  bullets.push('VAH / POC / VAL pending — requires <strong>volume_profile</strong> producer (next session)');
+  const climaxRow = fullVs.climax_bar_t
+    ? `<tr><td>Climax bar</td><td class="up">${new Date(fullVs.climax_bar_t * 1000).toISOString().slice(0,10)} · RVOL ${fullVs.climax_bar_rvol}</td></tr>`
+    : `<tr><td>Climax bar</td><td>none in 20d</td></tr>`;
+  const nakedRow = (fullVs.vp_naked_poc_age_d != null)
+    ? `<tr><td>Naked POC age</td><td class="warn">${fullVs.vp_naked_poc_age_d}d untouched</td></tr>`
+    : `<tr><td>Naked POC age</td><td>—</td></tr>`;
+  const expiryRow = fullVs.expiry_week_caveat
+    ? `<tr><td>Expiry week</td><td class="warn">YES · rollover distortion likely</td></tr>`
+    : `<tr><td>Expiry week</td><td>no</td></tr>`;
+  const deliveryRow = (fullVs.delivery_pct != null)
+    ? `<tr><td>Delivery %</td><td>${fmtPct(fullVs.delivery_pct)}%</td></tr>`
+    : `<tr><td>Delivery %</td><td class="dim">— (F&O data not wired yet)</td></tr>`;
 
-  return `<ul class="vol-list">${bullets.map(b => `<li>${b}</li>`).join('')}</ul>`;
+  return `
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:18px;">
+      <div>
+        <div class="r-head">RVOL · last 5 bars</div>
+        <div class="vs-spark">${sparkRows || '<div class="dock-empty">—</div>'}</div>
+        <div style="margin-top:12px; font-size:12px; color:var(--text-2);">
+          <strong style="color:var(--text); font-size:14px;">${_esc(vs.rvol_regime)}</strong> · current RVOL <strong>${vs.rvol_current.toFixed(2)}</strong>
+        </div>
+      </div>
+      <div>
+        <div class="r-head">Volume Profile (recent ${fullVs.vp_window_bars || 60} bars)</div>
+        <table class="rs-table"><tbody>
+          <tr><td>POC</td><td>₹${(vs.vp_poc ?? 0).toFixed(2)}</td></tr>
+          <tr><td>VAH</td><td>₹${(vs.vp_vah ?? 0).toFixed(2)}</td></tr>
+          <tr><td>VAL</td><td>₹${(vs.vp_val ?? 0).toFixed(2)}</td></tr>
+        </tbody></table>
+      </div>
+      <div style="grid-column: span 2;">
+        <div class="r-head">Microstructure</div>
+        <table class="rs-table"><tbody>
+          <tr><td>ATV20</td><td class="${vs.atv20_meets_min ? 'up' : 'down'}">₹${(vs.atv20_crores ?? 0).toFixed(0)}Cr ${vs.atv20_meets_min ? '· meets 20Cr min' : '· below 20Cr F&O min'}</td></tr>
+          ${climaxRow}
+          ${nakedRow}
+          ${expiryRow}
+          ${deliveryRow}
+        </tbody></table>
+      </div>
+    </div>
+  `;
 }
 
 function _renderRelativeTab(outputs, bars) {
