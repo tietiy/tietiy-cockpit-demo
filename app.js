@@ -145,6 +145,7 @@ for (let i = 0; i < PRIOR_FIB_SERIES_COUNT; i++) {
 // rest of the module (bootstrap IIFE included) must still run. Defensive wrapper.
 let _srZonesToDraw = [];
 let _orderBlocksToDraw = [];
+let _sweepsToDraw = [];
 let overlayCanvas = null;
 let overlayCtx = null;
 let _chartHost = null;
@@ -320,6 +321,83 @@ function _drawOrderBlocksOverlay() {
   }
 }
 
+// Liquidity-sweep markers — small triangles at the swept wick extremum +
+// a dashed connector to the swept pivot. Spring (sweep_low + CHoCH_up) and
+// UTAD (sweep_high + CHoCH_down) get a bigger marker + a text label so the
+// operator can spot Wyckoff transitions at a glance. 2026-06-03.
+function _drawLiquiditySweepsOverlay() {
+  if (!overlayCanvas || !overlayCtx) return;
+  if (!_sweepsToDraw.length) return;
+  const ts = chart.timeScale();
+
+  for (const s of _sweepsToDraw) {
+    const x = ts.timeToCoordinate(s.t);
+    const y = candle.priceToCoordinate(s.price);
+    if (x === null || y === null) continue;
+
+    const big = s.is_spring || s.is_utad;
+    const tri = big ? 9 : 6;
+    const dir = (s.direction === 'sweep_low');   // true = upward triangle below price
+    const fill   = s.is_spring ? 'rgba(34, 197, 94, 0.95)'
+                 : s.is_utad   ? 'rgba(239, 68, 68, 0.95)'
+                 : dir         ? 'rgba(34, 197, 94, 0.70)'
+                 :               'rgba(239, 68, 68, 0.70)';
+    const stroke = big ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)';
+
+    // Connector from swept pivot price to sweep wick — light dashed line so
+    // the operator visually pairs the sweep with the level it grabbed.
+    if (s.swept_pivot_t && s.swept_pivot_price != null) {
+      const xp = ts.timeToCoordinate(s.swept_pivot_t);
+      const yp = candle.priceToCoordinate(s.swept_pivot_price);
+      if (xp !== null && yp !== null) {
+        overlayCtx.strokeStyle = big ? fill : 'rgba(124, 134, 158, 0.45)';
+        overlayCtx.lineWidth = big ? 1.4 : 1;
+        overlayCtx.setLineDash([3, 3]);
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(xp, yp); overlayCtx.lineTo(x, y);
+        overlayCtx.stroke();
+        overlayCtx.setLineDash([]);
+      }
+    }
+
+    // Triangle pointing toward the candle body (sweep_low → ▲ below; sweep_high → ▼ above)
+    overlayCtx.beginPath();
+    if (dir) {
+      // ▲ pointing up, placed just BELOW the wick low
+      const yt = y + 4;
+      overlayCtx.moveTo(x,        yt);
+      overlayCtx.lineTo(x - tri,  yt + tri * 1.4);
+      overlayCtx.lineTo(x + tri,  yt + tri * 1.4);
+    } else {
+      // ▼ pointing down, placed just ABOVE the wick high
+      const yt = y - 4;
+      overlayCtx.moveTo(x,        yt);
+      overlayCtx.lineTo(x - tri,  yt - tri * 1.4);
+      overlayCtx.lineTo(x + tri,  yt - tri * 1.4);
+    }
+    overlayCtx.closePath();
+    overlayCtx.fillStyle = fill;
+    overlayCtx.fill();
+    overlayCtx.strokeStyle = stroke;
+    overlayCtx.lineWidth = 1;
+    overlayCtx.stroke();
+
+    // Spring/UTAD label badge
+    if (big) {
+      const label = s.is_spring ? 'SPRING' : 'UTAD';
+      overlayCtx.font = 'bold 10px "JetBrains Mono", monospace';
+      overlayCtx.textAlign = 'center';
+      overlayCtx.textBaseline = dir ? 'top' : 'bottom';
+      const ly = dir ? y + 4 + tri * 1.4 + 4 : y - 4 - tri * 1.4 - 4;
+      // shadow for legibility against candles
+      overlayCtx.fillStyle = 'rgba(0,0,0,0.7)';
+      overlayCtx.fillText(label, x + 1, ly + 1);
+      overlayCtx.fillStyle = fill;
+      overlayCtx.fillText(label, x, ly);
+    }
+  }
+}
+
 function _drawSRZoneOverlay() {
   if (!overlayCanvas || !overlayCtx) return;
   const w = overlayCanvas.width / (window.devicePixelRatio || 1);
@@ -335,6 +413,8 @@ function _drawSRZoneOverlay() {
   _drawTrendlinesOverlay();
   // Order blocks — drawn BEFORE the SR zone fills so SR labels still render on top.
   _drawOrderBlocksOverlay();
+  // Liquidity sweeps — triangle markers at wick tips; Spring/UTAD get badge labels.
+  _drawLiquiditySweepsOverlay();
   // (fib overlay moved to AFTER the zone loop — see end of function — so fib lines
   // and labels render on TOP of zone fillRects instead of being covered by them.)
   if (!_srZonesToDraw.length) { _drawFibsOverlay(); return; }
@@ -573,6 +653,7 @@ let showCatalysts   = false;
 let showNews        = true;       // News badges on candles ON by default per practitioner mockup
 let showSRZones     = true;       // FOCUS: the ONLY structural layer on the chart
 let showOrderBlocks = true;       // OB rectangles — bullish_ob/bearish_ob (Step-1 brain L1)
+let showLiquiditySweeps = true;   // Sweep markers — sweep_low/sweep_high + Spring/UTAD (Step-1)
 let showFibs        = true;
 let showTrendlines  = true;
 let showZigzagMajor = false;
@@ -2694,6 +2775,26 @@ function applyImportanceFilterAndRender(){
     return Math.min(...z.anchors.map(a => a.t));
   }
 
+  // ── Liquidity sweeps → canvas-overlay list ──────────────────────────────
+  // Recent sweeps with reclaim. Spring/UTAD get bigger markers + labels.
+  _sweepsToDraw.length = 0;
+  if (showLiquiditySweeps && !presentMode) {
+    const lsOut = currentPrimitives['liquidity_sweep'];
+    const lsPrims = (lsOut?.primitives || []).filter(p => p.kind === 'liquidity_sweep');
+    for (const p of lsPrims) {
+      const f = p.factors || {};
+      _sweepsToDraw.push({
+        t:                 p.anchors[0].t,
+        price:             p.price,
+        direction:         f.direction,
+        swept_pivot_t:     f.swept_pivot_t,
+        swept_pivot_price: f.swept_pivot_price,
+        is_spring:         !!f.is_spring,
+        is_utad:           !!f.is_utad,
+      });
+    }
+  }
+
   // ── Order blocks → canvas-overlay list ──────────────────────────────────
   // Bullish OB (green) = down candle before strong up impulse.
   // Bearish OB (red)   = up candle before strong down impulse.
@@ -3208,6 +3309,9 @@ bindToggle('t-sr-zones',
 bindToggle('t-order-blocks',
   () => { showOrderBlocks = true;  applyImportanceFilterAndRender(); },
   () => { showOrderBlocks = false; applyImportanceFilterAndRender(); });
+bindToggle('t-liquidity-sweeps',
+  () => { showLiquiditySweeps = true;  applyImportanceFilterAndRender(); },
+  () => { showLiquiditySweeps = false; applyImportanceFilterAndRender(); });
 bindToggle('t-trendlines',
   () => { showTrendlines  = true;  applyImportanceFilterAndRender(); },
   () => { showTrendlines  = false; applyImportanceFilterAndRender(); });

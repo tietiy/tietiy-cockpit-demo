@@ -635,6 +635,7 @@ body::before {
 .trendline-swatch { color: #85c6a3!important; }
 .fib-swatch       { color: #d9a94e!important; }
 .ob-swatch        { color: var(--accent)!important; }
+.ls-swatch        { color: var(--violet)!important; }
 
 .impctl {
   display: flex; align-items: center; gap: 6px;
