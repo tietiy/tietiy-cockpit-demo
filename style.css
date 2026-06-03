@@ -509,6 +509,16 @@ body::before {
    ╚════════════════════════════════════════════════════════════════════════╝ */
 .chart { padding: 0; overflow: hidden; }
 #chart { width: 100%; height: 100%; }
+/* Overlay canvas — created in JS, appended as sibling of #chart. Without this
+   absolute positioning the canvas would flow as a block below the chart and
+   no SR zones / trendlines / fibs would be visible. The rule was lost in the
+   Tier-1 style.css rewrite — operator caught it 2026-06-03. */
+#sr-overlay-canvas {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
 
 /* Trend-state corner badge */
 .trend-badge {
