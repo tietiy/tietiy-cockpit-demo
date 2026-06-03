@@ -160,22 +160,36 @@ body::before {
   border-radius: var(--radius-lg);
   box-shadow: var(--glass-shadow);
 }
-.cmdbar { border-radius: var(--radius); }   /* slimmer top bar */
-.banner { border-radius: var(--radius); }   /* slimmer banner */
+.cmdbar {
+  border-radius: var(--radius);
+  overflow: visible;       /* CRITICAL: the autocomplete dropdown overflows
+                              the bar downward — without this it gets clipped */
+  z-index: 50;             /* sit above other glass cells so the dropdown
+                              renders above .hero / .banner / .chart */
+}
+.banner { border-radius: var(--radius); }
 
 /* ╔════════════════════════════════════════════════════════════════════════╗
    ║                            COMMAND BAR                                 ║
    ╚════════════════════════════════════════════════════════════════════════╝ */
 .cmdbar {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  /* Left grows for the search; tabs collapse below 1400px; right hugs content */
+  grid-template-columns: minmax(380px, 1fr) auto auto;
   align-items: center;
   padding: 0 14px;
-  gap: 16px;
+  gap: 14px;
 }
 .cmdbar-l { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .cmdbar-c { display: flex; align-items: center; gap: 4px; justify-self: center; }
-.cmdbar-r { display: flex; align-items: center; gap: 8px; justify-self: end; min-width: 0; }
+.cmdbar-r { display: flex; align-items: center; gap: 6px; justify-self: end; min-width: 0; }
+/* Hide the Phase-2 stub tabs below 1400px — they crowd the indices + search.
+   Re-shown on larger desktops where there's room. */
+@media (max-width: 1399px) {
+  .cmdbar-c { display: none; }
+  .cmdbar { grid-template-columns: minmax(280px, 1fr) auto; }
+}
+/* Mobile breakpoint already hides .cmdbar-c — this complements it */
 
 /* Brand mark — astronomy theme: ◇ stellar diamond + uppercase mono wordmark.
    Sized so the operator can actually see it (prev 14px was lost in the bar). */
@@ -243,14 +257,14 @@ body::before {
 }
 
 .dropdown {
-  position: absolute; top: 34px; left: 0; right: 0;
-  background: rgba(12, 16, 22, 0.96);
+  position: absolute; top: 40px; left: 0; right: 0;
+  background: rgba(12, 16, 22, 0.98);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-  border: 1px solid var(--ink-2);
+  border: 1px solid var(--ink-3);
   border-radius: 8px;
-  max-height: 320px; overflow-y: auto;
-  display: none; z-index: 100;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  max-height: 360px; overflow-y: auto;
+  display: none; z-index: 9999;             /* above every other stacking context */
+  box-shadow: 0 12px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(92, 225, 230, 0.15);
 }
 .dropdown.open { display: block; }
 .dd-item {
@@ -317,17 +331,30 @@ body::before {
 }
 .pit-date:hover { border-color: var(--gold); }
 
+/* Status pill — compact dot + short label. Hover for the full detail string. */
 .status {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--dim);
-  font-family: var(--mono);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  background: var(--ink-1-solid);
+  border: 1px solid var(--ink-2);
+  border-radius: 999px;
+  color: var(--dim);
+  white-space: nowrap;
+  cursor: default;
+  max-width: 130px; overflow: hidden;
 }
 .status .dotled {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--dimmer);
+  flex-shrink: 0;
 }
+.status.live  { color: var(--up);   border-color: rgba(34, 197, 94, 0.32); background: var(--green-soft); }
 .status.live  .dotled { background: var(--up);  box-shadow: 0 0 8px var(--up); }
+.status.error { color: var(--err);  border-color: rgba(239, 68, 68, 0.32); background: var(--red-soft); }
 .status.error .dotled { background: var(--err); box-shadow: 0 0 8px var(--err); }
+#status-text { overflow: hidden; text-overflow: ellipsis; }
 
 /* ╔════════════════════════════════════════════════════════════════════════╗
    ║                           HERO COLUMN                                  ║

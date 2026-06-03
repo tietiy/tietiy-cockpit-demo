@@ -1622,9 +1622,30 @@ const ctxContent = document.getElementById('sp-context-content');
 const spSelected = document.getElementById('sp-selected');
 const spSelectedContent = document.getElementById('sp-selected-content');
 
+// Status pill — short label in the chip + full detail string in title tooltip.
+// Operator complaint 2026-06-03: "live · 2977 bars · lookback=169/357 …" was
+// ugly and overflowed the corner. Now collapses to "LIVE 2977b" or similar.
 function showStatus(kind, text){
   statusEl.className = 'status' + (kind ? ' ' + kind : '');
-  statusText.textContent = text;
+  // Keep the full detail string accessible via tooltip
+  statusEl.title = text || '';
+  let short;
+  if (kind === 'live') {
+    // "live · 2977 bars · lookback=…" → "LIVE · 2977b"
+    const m = /(\d{2,5})\s*bars?/i.exec(text || '');
+    short = m ? `LIVE · ${m[1]}b` : 'LIVE';
+  } else if (kind === 'error') {
+    short = 'ERROR';
+  } else if (/loading/i.test(text || '')) {
+    short = 'LOADING';
+  } else if (/universe loaded/i.test(text || '')) {
+    short = 'READY';
+  } else if (!text || /no symbol|idle/i.test(text)) {
+    short = 'IDLE';
+  } else {
+    short = (text || '').slice(0, 14);
+  }
+  statusText.textContent = short;
 }
 
 function showError(symbol, msg){
