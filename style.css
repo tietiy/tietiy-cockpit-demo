@@ -596,8 +596,11 @@ body.fullchart-mode .chart-fs-btn { display: none; }
   border: 1px solid rgba(124, 134, 158, 0.12);
 }
 .chart-toolbar .dd-body {
-  /* Open UPWARD (above the summary) since the toolbar is at the bottom now */
+  /* Open UPWARD (above the summary) since the toolbar is at the bottom-LEFT.
+     Override `right: 0` from the base .dd-body so the menu opens to the
+     RIGHT — leftward would extend off-screen past the chart cell's left edge. */
   top: auto; bottom: 36px;
+  right: auto; left: 0;
 }
 
 .dd-menu summary {
