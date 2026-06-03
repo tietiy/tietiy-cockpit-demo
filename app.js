@@ -144,6 +144,7 @@ for (let i = 0; i < PRIOR_FIB_SERIES_COUNT; i++) {
 // Canvas-overlay init wrapped in try/catch — if ANY of this throws synchronously, the
 // rest of the module (bootstrap IIFE included) must still run. Defensive wrapper.
 let _srZonesToDraw = [];
+let _orderBlocksToDraw = [];
 let overlayCanvas = null;
 let overlayCtx = null;
 let _chartHost = null;
@@ -275,6 +276,50 @@ function _drawChochTrigger() {
   overlayCtx.fillText(`${arrow} CHoCH TRIGGER ${_chochTriggerPrice.toFixed(2)}`, w - 8, y - 4);
 }
 
+// Order-block overlay — semi-transparent rectangles anchored on the OB candle,
+// extending forward until mitigated (or to the current bar if still fresh).
+// Step-1 Brain Layer 1, 2026-06-03.
+function _drawOrderBlocksOverlay() {
+  if (!overlayCanvas || !overlayCtx) return;
+  if (!_orderBlocksToDraw.length) return;
+  const ts = chart.timeScale();
+  const w = overlayCanvas.width / (window.devicePixelRatio || 1);
+  const latestT = currentBars.length ? currentBars[currentBars.length - 1].time : null;
+  if (latestT === null) return;
+
+  for (const ob of _orderBlocksToDraw) {
+    let xStart = ts.timeToCoordinate(ob.start_t);
+    const endT = ob.mitigated_at_t || latestT;
+    let xEnd   = ts.timeToCoordinate(endT);
+    const yTop = candle.priceToCoordinate(ob.price_hi);
+    const yBot = candle.priceToCoordinate(ob.price_lo);
+    if (yTop === null || yBot === null) continue;
+    if (xStart === null) xStart = 0;
+    if (xEnd === null)   xEnd = w;
+    if (xEnd <= xStart) continue;
+
+    overlayCtx.fillStyle = ob.fill;
+    overlayCtx.fillRect(xStart, yTop, xEnd - xStart, yBot - yTop);
+
+    overlayCtx.strokeStyle = ob.border;
+    overlayCtx.lineWidth   = ob.fresh ? 1.5 : 1;
+    if (ob.tested && !ob.fresh) overlayCtx.setLineDash([4, 3]);
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(xStart, yTop); overlayCtx.lineTo(xEnd, yTop);
+    overlayCtx.moveTo(xStart, yBot); overlayCtx.lineTo(xEnd, yBot);
+    overlayCtx.moveTo(xStart, yTop); overlayCtx.lineTo(xStart, yBot);
+    overlayCtx.stroke();
+    overlayCtx.setLineDash([]);
+
+    // Small "OB" tag at the left edge so the operator can identify it
+    overlayCtx.font = 'bold 9px "JetBrains Mono", monospace';
+    overlayCtx.fillStyle = ob.border;
+    overlayCtx.textBaseline = 'bottom';
+    overlayCtx.textAlign = 'left';
+    overlayCtx.fillText('OB', xStart + 3, yTop - 2);
+  }
+}
+
 function _drawSRZoneOverlay() {
   if (!overlayCanvas || !overlayCtx) return;
   const w = overlayCanvas.width / (window.devicePixelRatio || 1);
@@ -288,6 +333,8 @@ function _drawSRZoneOverlay() {
   _drawChochTrigger();
   // Trendlines drawn on overlay — tier-styled (HTF bold, internal medium, tactical thin).
   _drawTrendlinesOverlay();
+  // Order blocks — drawn BEFORE the SR zone fills so SR labels still render on top.
+  _drawOrderBlocksOverlay();
   // (fib overlay moved to AFTER the zone loop — see end of function — so fib lines
   // and labels render on TOP of zone fillRects instead of being covered by them.)
   if (!_srZonesToDraw.length) { _drawFibsOverlay(); return; }
@@ -525,6 +572,7 @@ let showEvents      = true;       // BOS/CHoCH inline markers — on by default 
 let showCatalysts   = false;
 let showNews        = true;       // News badges on candles ON by default per practitioner mockup
 let showSRZones     = true;       // FOCUS: the ONLY structural layer on the chart
+let showOrderBlocks = true;       // OB rectangles — bullish_ob/bearish_ob (Step-1 brain L1)
 let showFibs        = true;
 let showTrendlines  = true;
 let showZigzagMajor = false;
@@ -2646,6 +2694,41 @@ function applyImportanceFilterAndRender(){
     return Math.min(...z.anchors.map(a => a.t));
   }
 
+  // ── Order blocks → canvas-overlay list ──────────────────────────────────
+  // Bullish OB (green) = down candle before strong up impulse.
+  // Bearish OB (red)   = up candle before strong down impulse.
+  // Lifecycle states tint the alpha: fresh > tested > mitigated.
+  _orderBlocksToDraw.length = 0;
+  if (showOrderBlocks && !presentMode) {
+    const obOut = currentPrimitives['order_block'];
+    const obPrims = (obOut?.primitives || []).filter(p => p.kind === 'order_block');
+    for (const p of obPrims) {
+      const f = p.factors || {};
+      const isBull = f.direction === 'bullish_ob';
+      const fresh = !!f.fresh;
+      const tested = !!f.tested;
+      const mitigated = !!f.mitigated;
+      // Alpha gradient by lifecycle state — fresh is loudest.
+      const alphaFill   = mitigated ? 0.05 : (fresh ? 0.18 : 0.10);
+      const alphaBorder = mitigated ? 0.30 : (fresh ? 0.90 : 0.55);
+      const fill   = isBull
+        ? `rgba(34, 197, 94, ${alphaFill})`
+        : `rgba(239, 68, 68, ${alphaFill})`;
+      const border = isBull
+        ? `rgba(34, 197, 94, ${alphaBorder})`
+        : `rgba(239, 68, 68, ${alphaBorder})`;
+      _orderBlocksToDraw.push({
+        start_t:        p.anchors[0].t,
+        mitigated_at_t: f.mitigated_at_t || null,
+        price_hi: p.price_hi,
+        price_lo: p.price_lo,
+        fill, border,
+        fresh, tested, mitigated,
+        direction: f.direction,
+      });
+    }
+  }
+
   // ── CHoCH trigger derivation (from structure_label primitives) ──
   // In BEAR: nearest unmitigated LH — close above = CHoCH→BULL trigger.
   // In BULL: nearest unmitigated HL — close below = CHoCH→BEAR trigger.
@@ -3122,6 +3205,9 @@ bindToggle('t-catalyst',
 bindToggle('t-sr-zones',
   () => { showSRZones     = true;  applyImportanceFilterAndRender(); },
   () => { showSRZones     = false; applyImportanceFilterAndRender(); });
+bindToggle('t-order-blocks',
+  () => { showOrderBlocks = true;  applyImportanceFilterAndRender(); },
+  () => { showOrderBlocks = false; applyImportanceFilterAndRender(); });
 bindToggle('t-trendlines',
   () => { showTrendlines  = true;  applyImportanceFilterAndRender(); },
   () => { showTrendlines  = false; applyImportanceFilterAndRender(); });
