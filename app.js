@@ -1385,6 +1385,7 @@ function _renderRail() {
 // ═════════════════════════════════════════════════════════════════════════════
 
 const _DOCK_TILE_DEFS = [
+  { key: 'narrative',  title: 'READ',        render: _tileNarrative,   modal: _renderNarrativeTab },
   { key: 'confluence', title: 'CONFLUENCE',  render: _tileConfluence,  modal: _renderLevelsTab   },
   { key: 'plans',      title: 'TRADE PLANS', render: _tilePlans,       modal: _renderPlansTab    },
   { key: 'news',       title: 'NEWS',        render: _tileNews,        modal: _renderNewsTab     },
@@ -1392,7 +1393,6 @@ const _DOCK_TILE_DEFS = [
   { key: 'regime',     title: 'REGIME',      render: _tileRegime,      modal: _renderRegimeFullTab },
   { key: 'fibs',       title: 'FIBS',        render: _tileFibs,        modal: _renderFibsTab     },
   { key: 'volume',     title: 'VOLUME',      render: _tileVolume,      modal: _renderVolumeTab   },
-  { key: 'setup',      title: 'SETUP',       render: _tileSetup,       modal: _renderSetupTab    },
 ];
 
 function _renderDock() {
@@ -1413,6 +1413,63 @@ function _renderDock() {
 }
 
 // ─── Per-tile summary renderers (~3-4 lines each) ──────────────────────────
+
+// ─── Brain Layer 2: NarrativeRow tile + modal ─────────────────────────────
+// Top-of-stack trader-natural rows, each grounded in evidence primitives.
+function _tileNarrative(outputs, bars) {
+  const rows = (outputs.narrative_row?.primitives || [])
+    .filter(p => p.kind === 'narrative_row')
+    .map(p => p.factors || {})
+    .filter(f => f.tier === 1);
+  if (!rows.length) return `<div class="dt-dim">no narrative — observing</div>`;
+  return rows.slice(0, 3).map(r => {
+    const cat = (r.category || '').toLowerCase();
+    return `<div class="dt-narr-row">
+              <span class="dt-narr-cat ${_esc(cat)}">${_esc(r.category || '')}</span>
+              <span class="dt-narr-head dt-clip">${_esc((r.headline || '').slice(0, 70))}</span>
+            </div>`;
+  }).join('');
+}
+
+function _renderNarrativeTab(outputs, bars) {
+  const allRows = (outputs.narrative_row?.primitives || [])
+    .filter(p => p.kind === 'narrative_row')
+    .map(p => p.factors || {});
+  if (!allRows.length) {
+    return `<div class="dock-empty">narrative_row producer not available for this run</div>`;
+  }
+  const tier1 = allRows.filter(r => r.tier === 1);
+  const tier2 = allRows.filter(r => r.tier === 2);
+  const tier3 = allRows.filter(r => r.tier === 3);
+
+  const renderRow = (r) => {
+    const cat = (r.category || '').toLowerCase();
+    const cond = r.conditional ? `<div class="nm-row-cond"><strong>If:</strong> ${_esc(r.conditional)}</div>` : '';
+    const refs = (r.evidence_refs || []).map(ref => `<span class="nm-row-ref">${_esc(ref)}</span>`).join('');
+    return `<div class="nm-row ${_esc(cat)}">
+              <div class="nm-row-head">
+                <span class="nm-row-cat">${_esc(r.category || '')}</span>
+                <span class="nm-row-cert">${_esc(r.certainty || '')}</span>
+                <span class="nm-row-state">${_esc(r.state || 'fresh')}</span>
+              </div>
+              <div class="nm-row-text">${_esc(r.headline || '')}</div>
+              ${cond}
+              <div class="nm-row-refs"><span class="nm-refs-k">Evidence</span>${refs}</div>
+            </div>`;
+  };
+
+  let html = `<div class="r-head">Tier 1 — top-of-stack</div>`;
+  html += `<div class="nm-rows">${tier1.map(renderRow).join('') || '<div class="dock-empty">none</div>'}</div>`;
+  if (tier2.length) {
+    html += `<div class="r-head" style="margin-top:14px">Tier 2 — context</div>`;
+    html += `<div class="nm-rows">${tier2.map(renderRow).join('')}</div>`;
+  }
+  if (tier3.length) {
+    html += `<div class="r-head" style="margin-top:14px">Tier 3 — raw</div>`;
+    html += `<div class="nm-rows">${tier3.map(renderRow).join('')}</div>`;
+  }
+  return html;
+}
 
 function _tileConfluence(outputs, bars) {
   const zones = (outputs.sr_zones?.primitives || []).filter(p => p.kind === 'sr_zone');
