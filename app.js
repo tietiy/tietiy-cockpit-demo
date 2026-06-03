@@ -3643,16 +3643,39 @@ bindToggle('t-wyckoff',
   () => { showWyckoff = false; applyImportanceFilterAndRender(); });
 
 // ─── Fullscreen-chart button: opens current symbol in a new tab with
-//     ?fullchart=1 — the page CSS then hides everything except the chart.
-//     Wired to BOTH buttons (toolbar one + top-right always-visible one).
+//     ?fullchart=1. Uses a synthesised <a target="_blank"> click rather
+//     than window.open() — Chrome/Safari popup blockers reject the latter
+//     under various conditions; the former is treated as a normal link.
+//     Wired to BOTH buttons (toolbar + top-right always-visible).
 (() => {
-  const openFull = () => {
+  const openFull = (e) => {
     const sym = currentSymbol || (new URLSearchParams(location.search)).get('sym') || '';
     if (!sym) { alert('Load a symbol first'); return; }
     const u = new URL(location.href);
     u.searchParams.set('sym', sym);
     u.searchParams.set('fullchart', '1');
-    window.open(u.toString(), '_blank', 'noopener');
+    const href = u.toString();
+    // Primary path: synthetic <a> click → browsers treat as user-initiated nav
+    try {
+      const a = document.createElement('a');
+      a.href = href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    } catch (err) {
+      console.error('[fullchart] anchor click failed:', err);
+    }
+    // Fallback: window.open in case the anchor path was blocked
+    const w = window.open(href, '_blank');
+    if (!w) {
+      // Final fallback: navigate the CURRENT tab to the fullchart URL.
+      // The operator can hit Back to return to the cockpit.
+      console.warn('[fullchart] popup blocked — navigating current tab');
+      location.href = href;
+    }
   };
   for (const id of ['btn-fullchart', 'btn-fullchart-top']) {
     const btn = document.getElementById(id);
