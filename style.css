@@ -663,6 +663,50 @@ body::before {
   border: 1px solid var(--ink-2);
 }
 
+/* Chart-toolbar buttons (Full, etc.) */
+.ct-btn {
+  background: rgba(13, 17, 30, 0.94);
+  border: 1px solid rgba(124, 134, 158, 0.40);
+  color: var(--text);
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: 0.15s;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+}
+.ct-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 14px rgba(92, 225, 230, 0.20);
+}
+
+/* ════════════ FULLCHART MODE — ?fullchart=1 opens the chart full-screen ═══
+   Hides every cell except the chart and the slim cmdbar. The chart fills
+   the entire viewport so the operator can study the candles + overlays
+   in a separate window without losing the cockpit reference tab. */
+body.fullchart-mode .app {
+  grid-template-columns: 1fr;
+  grid-template-rows:    56px 1fr;
+  grid-template-areas:
+    "cmdbar"
+    "chart";
+}
+body.fullchart-mode .hero,
+body.fullchart-mode .banner,
+body.fullchart-mode .rail,
+body.fullchart-mode .dock { display: none !important; }
+/* Hide the cmdbar's tab nav + indices in fullchart so the bar stays slim */
+body.fullchart-mode .cmdbar-c { display: none; }
+/* Keep the wordmark + search + status + Full-button as a compact strip */
+/* In fullchart mode, don't show the Full-button (you're already full) */
+body.fullchart-mode #btn-fullchart { display: none; }
+/* The toolbar collapses to just Layers + swing slider in fullchart mode */
+body.fullchart-mode .chart-toolbar #dd-producers,
+body.fullchart-mode .chart-toolbar .present-hint { display: none; }
+
 /* Landing placeholder — when no symbol loaded, show a real hero experience
    (big ◇ logo + tagline + clickable universe chips). Operator request
    2026-06-03: "logo wasnt there" + "if user types, surface matching tickers". */

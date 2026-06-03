@@ -3641,6 +3641,30 @@ bindToggle('t-candle-psych',
 bindToggle('t-wyckoff',
   () => { showWyckoff = true;  applyImportanceFilterAndRender(); },
   () => { showWyckoff = false; applyImportanceFilterAndRender(); });
+
+// ─── Fullscreen-chart button: opens current symbol in a new tab with
+//     ?fullchart=1 — the page CSS then hides everything except the chart. ────
+(() => {
+  const btn = document.getElementById('btn-fullchart');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const sym = currentSymbol || (new URLSearchParams(location.search)).get('sym') || '';
+    if (!sym) {
+      alert('Load a symbol first');
+      return;
+    }
+    const u = new URL(location.href);
+    u.searchParams.set('sym', sym);
+    u.searchParams.set('fullchart', '1');
+    window.open(u.toString(), '_blank', 'noopener');
+  });
+})();
+
+// Apply fullchart-mode class to body when ?fullchart=1 is present.
+// CSS hides hero/banner/rail/dock and expands .chart to fill the viewport.
+if ((new URLSearchParams(location.search)).get('fullchart') === '1') {
+  document.body.classList.add('fullchart-mode');
+}
 bindToggle('t-trendlines',
   () => { showTrendlines  = true;  applyImportanceFilterAndRender(); },
   () => { showTrendlines  = false; applyImportanceFilterAndRender(); });
