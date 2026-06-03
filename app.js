@@ -636,121 +636,150 @@ function _drawWyckoffOverlay() {
   }
 }
 
-// V2 plot items renderer — V2 §14 §30 §41.
-// Renders the ≤7 cluster-merged items produced by v2/plot/priority.py.
-// Layer-role styling:
-//   demand        → green tint band with green border + green label
-//   supply        → red tint band with red border + red label
-//   trigger       → gold dashed horizontal line
-//   invalidation  → red dashed line
-//   level         → cyan accent band (catch-all)
+// V2 plot items renderer — V2 §14 §30 §41 strict allocation.
+// Renders:
+//   item_kind "band"               demand/supply/target — colored rectangle
+//   item_kind "trigger_line"       gold dashed horizontal line
+//   item_kind "invalidation_line"  red dashed horizontal line
+//   item_kind "decision_badge"     top-right corner pill, label = decision verb
+// Plus a soft regime tint over the whole chart background.
 function _drawV2PlotItems() {
   if (!overlayCanvas || !overlayCtx) return;
   if (!_v2PlotItems || !_v2PlotItems.length) return;
   if (!currentBars || !currentBars.length) return;
   const ts = chart.timeScale();
   const w  = overlayCanvas.width / (window.devicePixelRatio || 1);
+  const h  = overlayCanvas.height / (window.devicePixelRatio || 1);
   const latestT = currentBars[currentBars.length - 1].time;
-  // Anchor the V2 zones to start ~60 trading bars back so they render as a
-  // band across the visible chart area, not stretching to bar 0 of history.
   const startT = currentBars[Math.max(0, currentBars.length - 60)].time;
 
-  const COLORS = {
-    demand:        { fill: '34, 197, 94',   border: '34, 197, 94',  text: '34, 197, 94'  },
-    supply:        { fill: '239, 68, 68',   border: '239, 68, 68',  text: '239, 68, 68'  },
-    trigger:       { fill: '245, 200, 90',  border: '245, 200, 90', text: '245, 200, 90' },
-    invalidation:  { fill: '239, 68, 68',   border: '239, 68, 68',  text: '239, 68, 68'  },
-    level:         { fill: '92, 225, 230',  border: '92, 225, 230', text: '92, 225, 230' },
+  // ── V2 §15 step 1 — background regime tint ────────────────────────────────
+  // BEAR / MARKDOWN     → dark red wash
+  // BULL / MARKUP       → dark green wash
+  // TRANSITIONAL/CHOPPY → no tint (neutral)
+  const trend = _v2PlotMeta?.trend_state;
+  if (trend === 'BEAR') {
+    overlayCtx.fillStyle = 'rgba(239, 68, 68, 0.045)';
+    overlayCtx.fillRect(0, 0, w, h);
+  } else if (trend === 'BULL') {
+    overlayCtx.fillStyle = 'rgba(34, 197, 94, 0.045)';
+    overlayCtx.fillRect(0, 0, w, h);
+  }
+
+  // Layer-role color palette
+  const COL = {
+    demand:        { fill: '34, 197, 94',   stroke: '34, 197, 94',  text: '34, 197, 94'  },
+    supply:        { fill: '239, 68, 68',   stroke: '239, 68, 68',  text: '239, 68, 68'  },
+    target:        { fill: '174, 182, 194', stroke: '174, 182, 194', text: '174, 182, 194' },
+    trigger:       { fill: '245, 200, 90',  stroke: '245, 200, 90', text: '245, 200, 90' },
+    invalidation:  { fill: '239, 68, 68',   stroke: '239, 68, 68',  text: '239, 68, 68'  },
+    level:         { fill: '92, 225, 230',  stroke: '92, 225, 230', text: '92, 225, 230' },
   };
 
   for (const it of _v2PlotItems) {
-    const c = COLORS[it.layer_role] || COLORS.level;
+    const c = COL[it.layer_role] || COL.level;
     const op = Math.max(0.25, Math.min(1.0, it.opacity || 1.0));
     let xStart = ts.timeToCoordinate(startT);
     let xEnd   = ts.timeToCoordinate(latestT);
     if (xStart === null) xStart = 0;
     if (xEnd === null)   xEnd = w;
 
-    if (it.price_low !== null && it.price_high !== null) {
-      // ── Band-shaped item (demand / supply / level cluster) ─────────────
+    if (it.item_kind === 'decision_badge') {
+      // Top-right corner pill — the decision verb (V2 §41 #8)
+      const verb = (it.label || 'WAIT').toUpperCase();
+      overlayCtx.font = 'bold 13px "JetBrains Mono", monospace';
+      const tw = overlayCtx.measureText(verb).width + 18;
+      const x0 = w - tw - 12;
+      // verb-class color
+      let verbCol = '34, 197, 94';        // bull/take = green default
+      if (verb === 'STAND DOWN')    verbCol = '239, 68, 68';
+      else if (verb === 'WATCH')    verbCol = '245, 200, 90';
+      else if (verb === 'WAIT')     verbCol = '174, 182, 194';
+      else if (verb === 'ARM')      verbCol = '92, 225, 230';
+      overlayCtx.fillStyle = `rgba(${verbCol}, 0.96)`;
+      overlayCtx.fillRect(x0, 10, tw, 24);
+      overlayCtx.fillStyle = '#07090f';
+      overlayCtx.textAlign = 'center';
+      overlayCtx.textBaseline = 'middle';
+      overlayCtx.fillText(verb, x0 + tw / 2, 22);
+      continue;
+    }
+
+    if (it.item_kind === 'band' && it.price_low !== null && it.price_high !== null) {
       const yTop = candle.priceToCoordinate(it.price_high);
       const yBot = candle.priceToCoordinate(it.price_low);
       if (yTop === null || yBot === null) continue;
 
-      // Translucent fill
       overlayCtx.fillStyle = `rgba(${c.fill}, ${0.13 * op})`;
       overlayCtx.fillRect(xStart, yTop, xEnd - xStart, yBot - yTop);
 
-      // Top + bottom borders
-      overlayCtx.strokeStyle = `rgba(${c.border}, ${0.90 * op})`;
-      overlayCtx.lineWidth = it.plot_priority <= 2 ? 2 : 1.5;
-      if (it.layer_role === 'trigger' || it.layer_role === 'invalidation') {
-        overlayCtx.setLineDash([6, 4]);
-      }
+      overlayCtx.strokeStyle = `rgba(${c.stroke}, ${0.90 * op})`;
+      overlayCtx.lineWidth = it.plot_priority <= 2 ? 2 : 1.4;
       overlayCtx.beginPath();
       overlayCtx.moveTo(xStart, yTop); overlayCtx.lineTo(xEnd, yTop);
       overlayCtx.moveTo(xStart, yBot); overlayCtx.lineTo(xEnd, yBot);
       overlayCtx.stroke();
-      overlayCtx.setLineDash([]);
 
-      // Label at the right edge, vertically centered on the band
       const labelY = (yTop + yBot) / 2;
       const label = it.label || '';
       overlayCtx.font = `bold ${it.plot_priority <= 2 ? 12 : 11}px "JetBrains Mono", monospace`;
       const labelW = overlayCtx.measureText(label).width + 12;
-      overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.92 * op})`;
-      overlayCtx.fillRect(xEnd - labelW - 4, labelY - 9, labelW, 18);
-      overlayCtx.strokeStyle = `rgba(${c.border}, ${op})`;
+      overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.93 * op})`;
+      overlayCtx.fillRect(xEnd - labelW - 4, labelY - 10, labelW, 20);
+      overlayCtx.strokeStyle = `rgba(${c.stroke}, ${op})`;
       overlayCtx.lineWidth = 1;
-      overlayCtx.strokeRect(xEnd - labelW - 4, labelY - 9, labelW, 18);
+      overlayCtx.strokeRect(xEnd - labelW - 4, labelY - 10, labelW, 20);
       overlayCtx.fillStyle = `rgba(${c.text}, ${op})`;
       overlayCtx.textAlign = 'left';
       overlayCtx.textBaseline = 'middle';
       overlayCtx.fillText(label, xEnd - labelW + 2, labelY + 0.5);
 
-      // Sub-label (cluster components) underneath, smaller + dim
       if (it.sub_label) {
         overlayCtx.font = `10px "JetBrains Mono", monospace`;
         overlayCtx.fillStyle = `rgba(${c.text}, ${0.62 * op})`;
         overlayCtx.fillText(it.sub_label, xEnd - labelW + 2, labelY + 14);
       }
-    } else if (it.price !== null) {
-      // ── Point-shaped item (sweep / BOS / trigger price line) ──────────
+      continue;
+    }
+
+    if ((it.item_kind === 'trigger_line' || it.item_kind === 'invalidation_line')
+        && it.price !== null) {
       const y = candle.priceToCoordinate(it.price);
       if (y === null) continue;
-      overlayCtx.strokeStyle = `rgba(${c.border}, ${op})`;
-      overlayCtx.lineWidth = it.plot_priority <= 2 ? 2 : 1.5;
-      overlayCtx.setLineDash([6, 4]);
+      overlayCtx.strokeStyle = `rgba(${c.stroke}, ${op})`;
+      overlayCtx.lineWidth = 1.6;
+      overlayCtx.setLineDash([7, 5]);
       overlayCtx.beginPath();
       overlayCtx.moveTo(xStart, y); overlayCtx.lineTo(xEnd, y);
       overlayCtx.stroke();
       overlayCtx.setLineDash([]);
 
-      // Label at right edge
-      const label = it.label || `${it.price}`;
-      overlayCtx.font = `bold 11px "JetBrains Mono", monospace`;
+      const label = it.label || `${it.price.toFixed(2)}`;
+      overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
       const labelW = overlayCtx.measureText(label).width + 12;
-      overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.92 * op})`;
+      overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.93 * op})`;
       overlayCtx.fillRect(xEnd - labelW - 4, y - 9, labelW, 18);
-      overlayCtx.strokeStyle = `rgba(${c.border}, ${op})`;
+      overlayCtx.strokeStyle = `rgba(${c.stroke}, ${op})`;
       overlayCtx.strokeRect(xEnd - labelW - 4, y - 9, labelW, 18);
       overlayCtx.fillStyle = `rgba(${c.text}, ${op})`;
       overlayCtx.textAlign = 'left';
       overlayCtx.textBaseline = 'middle';
       overlayCtx.fillText(label, xEnd - labelW + 2, y + 0.5);
+      continue;
     }
   }
 
-  // V2 badge in the top-left of the chart so the operator knows V2 mode is on
-  overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
-  const badge = `V2 · ${_v2PlotItems.length} of ${_v2PlotMeta?.n_raw_objects || '?'}`;
-  const bw = overlayCtx.measureText(badge).width + 12;
+  // Small "V2 · N raw" stat pill — bottom-left so it doesn't fight the
+  // decision badge top-right.
+  overlayCtx.font = '10px "JetBrains Mono", monospace';
+  const stat = `V2 · ${_v2PlotMeta?.n_raw_objects || '?'} → ${_v2PlotItems.length}`;
+  const sw = overlayCtx.measureText(stat).width + 12;
+  overlayCtx.fillStyle = 'rgba(92, 225, 230, 0.20)';
+  overlayCtx.fillRect(12, h - 22, sw, 16);
   overlayCtx.fillStyle = 'rgba(92, 225, 230, 0.95)';
-  overlayCtx.fillRect(12, 8, bw, 20);
-  overlayCtx.fillStyle = '#07090f';
   overlayCtx.textAlign = 'center';
   overlayCtx.textBaseline = 'middle';
-  overlayCtx.fillText(badge, 12 + bw / 2, 18);
+  overlayCtx.fillText(stat, 12 + sw / 2, h - 14);
 }
 
 function _drawSRZoneOverlay() {
