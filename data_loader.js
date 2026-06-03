@@ -51,3 +51,16 @@ export async function fetchPrimitives(date, symbol) {
     return { ok: false, error: `fetch failed: ${e.message || e}`, date, symbol, outputs: {} };
   }
 }
+
+export async function fetchV2PlotItems(date, symbol) {
+  try {
+    const url = 'data/v2/plot_items/' + encodeURIComponent(date) + '/' + encodeURIComponent(symbol) + '.json';
+    const r = await fetch(url, { cache: 'no-store' });
+    if (r.status === 404) return { ok: false, error: '404 — V2 plot items not baked' };
+    if (!r.ok)            return { ok: false, error: `HTTP ${r.status}` };
+    const j = await r.json();
+    return { ok: true, ...j };
+  } catch (e) {
+    return { ok: false, error: `fetch failed: ${e.message || e}` };
+  }
+}

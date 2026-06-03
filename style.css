@@ -664,6 +664,7 @@ body.fullchart-mode .chart-fs-btn { display: none; }
 .tr-swatch        { color: var(--warn)!important; }
 .cp-swatch        { color: var(--text-2)!important; }
 .wy-swatch        { color: var(--violet)!important; }
+.v2-swatch        { color: var(--accent)!important; font-weight: 700; letter-spacing: 0.5px; }
 
 .impctl {
   display: flex; align-items: center; gap: 6px;

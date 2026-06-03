@@ -5,7 +5,7 @@
 //       time field is integer epoch seconds — aligns with locked Anchor.t convention.
 //   (2) NO silent sample fallback. A failed fetch surfaces a visible error state.
 
-import { fetchUniverse, fetchOhlcv, fetchRunDates, fetchPrimitives } from './data_loader.js';
+import { fetchUniverse, fetchOhlcv, fetchRunDates, fetchPrimitives, fetchV2PlotItems } from './data_loader.js';
 import { renderPrimitives, clearPrimitives } from './primitive_renderer.js';
 
 // ---- chart setup ----
@@ -149,6 +149,42 @@ let _sweepsToDraw = [];
 let _trapsToDraw = [];
 let _candlePsychToDraw = [];
 let _wyckoffToDraw = null;
+// V2 plot items — the cluster-merged ≤7 items from v2/plot/priority.py.
+// Fetched per (symbol, date) from data/v2/plot_items/<date>/<sym>.json.
+let _v2PlotItems = null;
+let _v2PlotMeta = null;
+
+// Fetch + draw the V2 plot items for the currently-loaded (symbol, date).
+async function _loadAndDrawV2() {
+  if (!currentSymbol || !CURRENT_DATE) {
+    _v2PlotItems = null;
+    _v2PlotMeta = null;
+    _scheduleOverlayRedraw();
+    return;
+  }
+  try {
+    const res = await fetchV2PlotItems(CURRENT_DATE, currentSymbol);
+    if (!res.ok) {
+      console.warn('[V2] fetch failed:', res.error);
+      _v2PlotItems = [];
+      _v2PlotMeta = null;
+    } else {
+      _v2PlotItems = res.items || [];
+      _v2PlotMeta  = {
+        n_raw_objects: res.n_raw_objects,
+        last_close:    res.last_close,
+        atr14:         res.atr14,
+        trend_state:   res.trend_state,
+      };
+      console.info(`[V2] ${currentSymbol} @ ${CURRENT_DATE}: ${res.n_raw_objects} raw → ${_v2PlotItems.length} chart items`);
+    }
+  } catch (e) {
+    console.error('[V2] load error:', e);
+    _v2PlotItems = [];
+    _v2PlotMeta = null;
+  }
+  _scheduleOverlayRedraw();
+}
 let overlayCanvas = null;
 let overlayCtx = null;
 let _chartHost = null;
@@ -600,6 +636,123 @@ function _drawWyckoffOverlay() {
   }
 }
 
+// V2 plot items renderer — V2 §14 §30 §41.
+// Renders the ≤7 cluster-merged items produced by v2/plot/priority.py.
+// Layer-role styling:
+//   demand        → green tint band with green border + green label
+//   supply        → red tint band with red border + red label
+//   trigger       → gold dashed horizontal line
+//   invalidation  → red dashed line
+//   level         → cyan accent band (catch-all)
+function _drawV2PlotItems() {
+  if (!overlayCanvas || !overlayCtx) return;
+  if (!_v2PlotItems || !_v2PlotItems.length) return;
+  if (!currentBars || !currentBars.length) return;
+  const ts = chart.timeScale();
+  const w  = overlayCanvas.width / (window.devicePixelRatio || 1);
+  const latestT = currentBars[currentBars.length - 1].time;
+  // Anchor the V2 zones to start ~60 trading bars back so they render as a
+  // band across the visible chart area, not stretching to bar 0 of history.
+  const startT = currentBars[Math.max(0, currentBars.length - 60)].time;
+
+  const COLORS = {
+    demand:        { fill: '34, 197, 94',   border: '34, 197, 94',  text: '34, 197, 94'  },
+    supply:        { fill: '239, 68, 68',   border: '239, 68, 68',  text: '239, 68, 68'  },
+    trigger:       { fill: '245, 200, 90',  border: '245, 200, 90', text: '245, 200, 90' },
+    invalidation:  { fill: '239, 68, 68',   border: '239, 68, 68',  text: '239, 68, 68'  },
+    level:         { fill: '92, 225, 230',  border: '92, 225, 230', text: '92, 225, 230' },
+  };
+
+  for (const it of _v2PlotItems) {
+    const c = COLORS[it.layer_role] || COLORS.level;
+    const op = Math.max(0.25, Math.min(1.0, it.opacity || 1.0));
+    let xStart = ts.timeToCoordinate(startT);
+    let xEnd   = ts.timeToCoordinate(latestT);
+    if (xStart === null) xStart = 0;
+    if (xEnd === null)   xEnd = w;
+
+    if (it.price_low !== null && it.price_high !== null) {
+      // ── Band-shaped item (demand / supply / level cluster) ─────────────
+      const yTop = candle.priceToCoordinate(it.price_high);
+      const yBot = candle.priceToCoordinate(it.price_low);
+      if (yTop === null || yBot === null) continue;
+
+      // Translucent fill
+      overlayCtx.fillStyle = `rgba(${c.fill}, ${0.13 * op})`;
+      overlayCtx.fillRect(xStart, yTop, xEnd - xStart, yBot - yTop);
+
+      // Top + bottom borders
+      overlayCtx.strokeStyle = `rgba(${c.border}, ${0.90 * op})`;
+      overlayCtx.lineWidth = it.plot_priority <= 2 ? 2 : 1.5;
+      if (it.layer_role === 'trigger' || it.layer_role === 'invalidation') {
+        overlayCtx.setLineDash([6, 4]);
+      }
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(xStart, yTop); overlayCtx.lineTo(xEnd, yTop);
+      overlayCtx.moveTo(xStart, yBot); overlayCtx.lineTo(xEnd, yBot);
+      overlayCtx.stroke();
+      overlayCtx.setLineDash([]);
+
+      // Label at the right edge, vertically centered on the band
+      const labelY = (yTop + yBot) / 2;
+      const label = it.label || '';
+      overlayCtx.font = `bold ${it.plot_priority <= 2 ? 12 : 11}px "JetBrains Mono", monospace`;
+      const labelW = overlayCtx.measureText(label).width + 12;
+      overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.92 * op})`;
+      overlayCtx.fillRect(xEnd - labelW - 4, labelY - 9, labelW, 18);
+      overlayCtx.strokeStyle = `rgba(${c.border}, ${op})`;
+      overlayCtx.lineWidth = 1;
+      overlayCtx.strokeRect(xEnd - labelW - 4, labelY - 9, labelW, 18);
+      overlayCtx.fillStyle = `rgba(${c.text}, ${op})`;
+      overlayCtx.textAlign = 'left';
+      overlayCtx.textBaseline = 'middle';
+      overlayCtx.fillText(label, xEnd - labelW + 2, labelY + 0.5);
+
+      // Sub-label (cluster components) underneath, smaller + dim
+      if (it.sub_label) {
+        overlayCtx.font = `10px "JetBrains Mono", monospace`;
+        overlayCtx.fillStyle = `rgba(${c.text}, ${0.62 * op})`;
+        overlayCtx.fillText(it.sub_label, xEnd - labelW + 2, labelY + 14);
+      }
+    } else if (it.price !== null) {
+      // ── Point-shaped item (sweep / BOS / trigger price line) ──────────
+      const y = candle.priceToCoordinate(it.price);
+      if (y === null) continue;
+      overlayCtx.strokeStyle = `rgba(${c.border}, ${op})`;
+      overlayCtx.lineWidth = it.plot_priority <= 2 ? 2 : 1.5;
+      overlayCtx.setLineDash([6, 4]);
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(xStart, y); overlayCtx.lineTo(xEnd, y);
+      overlayCtx.stroke();
+      overlayCtx.setLineDash([]);
+
+      // Label at right edge
+      const label = it.label || `${it.price}`;
+      overlayCtx.font = `bold 11px "JetBrains Mono", monospace`;
+      const labelW = overlayCtx.measureText(label).width + 12;
+      overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.92 * op})`;
+      overlayCtx.fillRect(xEnd - labelW - 4, y - 9, labelW, 18);
+      overlayCtx.strokeStyle = `rgba(${c.border}, ${op})`;
+      overlayCtx.strokeRect(xEnd - labelW - 4, y - 9, labelW, 18);
+      overlayCtx.fillStyle = `rgba(${c.text}, ${op})`;
+      overlayCtx.textAlign = 'left';
+      overlayCtx.textBaseline = 'middle';
+      overlayCtx.fillText(label, xEnd - labelW + 2, y + 0.5);
+    }
+  }
+
+  // V2 badge in the top-left of the chart so the operator knows V2 mode is on
+  overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
+  const badge = `V2 · ${_v2PlotItems.length} of ${_v2PlotMeta?.n_raw_objects || '?'}`;
+  const bw = overlayCtx.measureText(badge).width + 12;
+  overlayCtx.fillStyle = 'rgba(92, 225, 230, 0.95)';
+  overlayCtx.fillRect(12, 8, bw, 20);
+  overlayCtx.fillStyle = '#07090f';
+  overlayCtx.textAlign = 'center';
+  overlayCtx.textBaseline = 'middle';
+  overlayCtx.fillText(badge, 12 + bw / 2, 18);
+}
+
 function _drawSRZoneOverlay() {
   if (!overlayCanvas || !overlayCtx) return;
   const w = overlayCanvas.width / (window.devicePixelRatio || 1);
@@ -609,6 +762,14 @@ function _drawSRZoneOverlay() {
   let bars;
   try { bars = currentBars; } catch (e) { return; }
   if (!bars || !bars.length) return;
+
+  // ── V2 mode: hide all legacy overlays, render only the cluster-merged ≤7
+  //    PlotItems from v2/plot/priority.py. The V2 chart-cleanup demo.
+  if (showV2Mode && !presentMode) {
+    _drawV2PlotItems();
+    return;
+  }
+
   // CHoCH trigger drawn first so SR labels (drawn last) can sit on top if they overlap.
   _drawChochTrigger();
   // Trendlines drawn on overlay — tier-styled (HTF bold, internal medium, tactical thin).
@@ -865,6 +1026,7 @@ let showLiquiditySweeps = true;   // Sweep markers — sweep_low/sweep_high + Sp
 let showTraps = true;             // Trap markers — bull_trap/bear_trap (failed BOS, Step-1)
 let showCandlePsych = false;      // Candle-psychology badges — DEFAULT OFF (can be noisy)
 let showWyckoff = true;           // Wyckoff Creek/Ice channel + event labels (Step-1 integrator)
+let showV2Mode  = false;          // V2 view: hide ALL legacy overlays + render ≤7 cluster items
 let showFibs        = true;
 let showTrendlines  = true;
 let showZigzagMajor = false;
@@ -2882,6 +3044,12 @@ async function loadSymbol(sym){
   legend.style.display = 'none';
 
   await loadPrimitivesForCurrent();
+  // Fetch V2 plot items for the (symbol, date) if V2 mode is on.
+  // We fetch lazily — only when the toggle is on. Avoids the network round-trip
+  // for operators who never enable V2 view.
+  if (showV2Mode) {
+    _loadAndDrawV2();
+  }
   // Final step: apply default zoom AFTER all series (candle/vol/SMA/zigzag) are populated.
   // zigzagSeries.setData() can re-fit the time scale; setting visible range here pins it.
   _applyDefaultZoom();
@@ -3641,6 +3809,9 @@ bindToggle('t-candle-psych',
 bindToggle('t-wyckoff',
   () => { showWyckoff = true;  applyImportanceFilterAndRender(); },
   () => { showWyckoff = false; applyImportanceFilterAndRender(); });
+bindToggle('t-v2-mode',
+  () => { showV2Mode = true;  _loadAndDrawV2(); },
+  () => { showV2Mode = false; _scheduleOverlayRedraw(); });
 
 // ─── Fullscreen-chart anchors: real <a target="_blank"> with a dynamic
 //     href. Browsers handle this as native link nav — no popup blockers
@@ -3698,8 +3869,12 @@ document.addEventListener('keydown', e => {
 
 // ---- PIT date selector ----
 pitDateSel.addEventListener('change', async () => {
+  // Date change → invalidate V2 cache so we re-fetch for the new PIT date.
+  _v2PlotItems = null;
+  _v2PlotMeta = null;
   CURRENT_DATE = pitDateSel.value;
   await loadPrimitivesForCurrent();
+  if (showV2Mode) _loadAndDrawV2();
 });
 
 // ---- Importance filter slider (display-only; no recompute) ----
