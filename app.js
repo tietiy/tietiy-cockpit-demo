@@ -766,6 +766,13 @@ function _drawSRZoneOverlay() {
   // ── V2 mode: hide all legacy overlays, render only the cluster-merged ≤7
   //    PlotItems from v2/plot/priority.py. The V2 chart-cleanup demo.
   if (showV2Mode && !presentMode) {
+    // Clear non-canvas legacy artifacts so the chart is genuinely clean:
+    //   - LWC candle markers (E/S/M/C letter badges, BOS/CHoCH dots, DIV box)
+    //   - LWC price-line chips on the right edge (1489.50 / 1336.83 / ...)
+    //   - Legacy trend badge top-left (BEAR 148d — collides with V2 badge)
+    if (candle && candle.setMarkers) candle.setMarkers([]);
+    _clearPriceChips();
+    if (trendBadge) trendBadge.style.display = 'none';
     _drawV2PlotItems();
     return;
   }
@@ -3839,7 +3846,10 @@ bindToggle('t-wyckoff',
   () => { showWyckoff = false; applyImportanceFilterAndRender(); });
 bindToggle('t-v2-mode',
   () => { showV2Mode = true;  _loadAndDrawV2(); },
-  () => { showV2Mode = false; _scheduleOverlayRedraw(); });
+  // OFF path: re-render the full primitive set so LWC markers + price-line
+  // chips + trend badge come back. Just clearing the canvas isn't enough —
+  // those legacy artifacts live on the LWC chart, not the canvas overlay.
+  () => { showV2Mode = false; applyImportanceFilterAndRender(); });
 
 // ─── Fullscreen-chart anchors: real <a target="_blank"> with a dynamic
 //     href. Browsers handle this as native link nav — no popup blockers
