@@ -3643,21 +3643,21 @@ bindToggle('t-wyckoff',
   () => { showWyckoff = false; applyImportanceFilterAndRender(); });
 
 // ─── Fullscreen-chart button: opens current symbol in a new tab with
-//     ?fullchart=1 — the page CSS then hides everything except the chart. ────
+//     ?fullchart=1 — the page CSS then hides everything except the chart.
+//     Wired to BOTH buttons (toolbar one + top-right always-visible one).
 (() => {
-  const btn = document.getElementById('btn-fullchart');
-  if (!btn) return;
-  btn.addEventListener('click', () => {
+  const openFull = () => {
     const sym = currentSymbol || (new URLSearchParams(location.search)).get('sym') || '';
-    if (!sym) {
-      alert('Load a symbol first');
-      return;
-    }
+    if (!sym) { alert('Load a symbol first'); return; }
     const u = new URL(location.href);
     u.searchParams.set('sym', sym);
     u.searchParams.set('fullchart', '1');
     window.open(u.toString(), '_blank', 'noopener');
-  });
+  };
+  for (const id of ['btn-fullchart', 'btn-fullchart-top']) {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', openFull);
+  }
 })();
 
 // Apply fullchart-mode class to body when ?fullchart=1 is present.
