@@ -1275,115 +1275,72 @@ function buildDashboardPanel(symbol, bars, outputs) {
   const lastBar = bars[bars.length - 1];
   const currentPrice = lastBar ? lastBar.close : null;
 
-  const trendState = (sl.facts || {}).trend_state || 'TRANSITIONAL';
-  const zones = (sr?.primitives || []).filter(p => p.kind === 'sr_zone');
+  // ── Read pre-computed dashboard_state primitive (§5.1 compliance — composite
+  // math lives in producers/dashboard_state.py, not here). Falls back gracefully
+  // when the producer's output isn't present (e.g. older PIT dates).
+  const dsPrim = outputs.dashboard_state?.primitives?.[0];
+  const ds = dsPrim?.factors || null;
 
-  const hasMinorReclaim = zones.some(z => {
-    const f = z.factors || {};
-    return f.classification === 'minor_support'
-      && (f.lifecycle === 'reclaimed' || f.lifecycle === 'failed_breakdown');
-  });
-  const hasLostSupply = zones.some(z => {
-    const f = z.factors || {};
-    return f.lifecycle === 'failed_reclaim'
-      && (f.classification || '').includes('resistance');
-  });
-  const htfDemand = zones.find(z => {
-    const f = z.factors || {};
-    return f.htf_confirmed && (f.classification || '').includes('support');
-  });
+  const trendState = ds?.trend_state || (sl.facts || {}).trend_state || 'TRANSITIONAL';
+  const zones = (sr?.primitives || []).filter(p => p.kind === 'sr_zone');
   const supplyZone = zones.find(z => (z.factors?.classification || '').includes('resistance'));
   const pivotZone  = zones.find(z => z.factors?.classification === 'minor_support');
+  const htfDemand  = zones.find(z => (z.factors?.htf_confirmed && (z.factors?.classification || '').includes('support')));
 
-  // ── Structure state (composed enum)
-  let structureStateText;
-  if (trendState === 'BEAR' && hasMinorReclaim) structureStateText = 'Bearish Recovery';
-  else if (trendState === 'BEAR') structureStateText = 'Bearish';
-  else if (trendState === 'BULL') structureStateText = 'Bullish';
-  else structureStateText = 'Range';
+  const structureStateText = ds?.structure_state_text || 'Range';
+  const decision           = ds?.decision || 'No Edge';
+  const decisionClassRaw   = ds?.decision_class || 'dim';
+  const decisionClass      = ({ warn: 'val-warn', bull: 'val-bull', bear: 'val-bear', dim: 'val-dim' })[decisionClassRaw] || 'val-dim';
 
-  // ── Decision (discipline-rule enum)
-  let decision, decisionClass;
-  if (trendState === 'BEAR' && hasLostSupply)         { decision = 'Watch Only';            decisionClass = 'val-warn'; }
-  else if (trendState === 'BULL' && hasMinorReclaim)  { decision = 'Actionable If Confirms'; decisionClass = 'val-bull'; }
-  else                                                 { decision = 'No Edge';                decisionClass = 'val-dim'; }
+  // Composites read from producer (§5.3 — score_breakdown sibling visible)
+  const trade_readiness = ds?.trade_readiness_score ?? 0;
+  const trBreakdown     = ds?.trade_readiness_breakdown || {};
+  const decision_confidence = ds?.decision_confidence_score ?? 0;
+  const dcBreakdown     = ds?.decision_confidence_breakdown || {};
 
-  // ── TRADE READINESS composite (0-100) + score_breakdown per §5.3 ──
-  // Inputs (each 0-25): location_quality, structure_alignment, risk_definable, confirmation_present.
-  // Heuristic weights — calibration is a Phase-8 Validation Gate task.
-  let loc_quality, struct_align, risk_def, confirmation;
-  if (hasLostSupply) {
-    loc_quality   = 8;   // below failed supply = poor entry zone
-    struct_align  = 10;  // recovery in bear = counter-trend, modest
-    risk_def      = 15;  // SL placeable below HTF demand
-    confirmation  = 5;   // no fresh bullish reversal candle confirmed
-  } else if (htfDemand && currentPrice && Math.abs(currentPrice - htfDemand.price) / htfDemand.price < 0.015) {
-    loc_quality   = 22;  // price at HTF demand — high-quality entry zone
-    struct_align  = 18;
-    risk_def      = 20;
-    confirmation  = 12;
-  } else {
-    loc_quality   = 12;  // mid-zone or unclear
-    struct_align  = 12;
-    risk_def      = 12;
-    confirmation  = 8;
+  const activeStructure = ds?.active_structure_text || 'No CHoCH trigger derived';
+  const priceLocation   = ds?.price_location_text   || 'Mid-zone';
+  const chochPrice      = (typeof ds?.choch_trigger_price === 'number') ? ds.choch_trigger_price : null;
+
+  // Key levels from the producer (already formatted)
+  const dsLevels = ds?.key_levels || [];
+  const levels = dsLevels.map(l => ({
+    name:  l.name,
+    price: l.value,
+    cls:   `lv-${l.kind}`,
+  }));
+
+  // Helper: a colored 0-100 bar — replaces verbose text breakdowns. Hover shows the math.
+  // Compact, scannable. The label is rendered next to the bar.
+  function _scoreBar(score, max, cls) {
+    const pct = Math.max(0, Math.min(100, Math.round((score / max) * 100)));
+    return `<div class="score-bar ${cls || ''}"><div class="score-bar-fill" style="width:${pct}%"></div></div>`;
   }
-  const trade_readiness = loc_quality + struct_align + risk_def + confirmation;
-
-  // ── DECISION CONFIDENCE composite (0-100) + score_breakdown per §5.3 ──
-  // Inputs (each 0-25): structure_clarity, level_quality, location_clarity, evidence_alignment, data_trust.
-  // Note: 5×25=125 max — caps to 100. Penalties subtract from raw.
-  const sc_structure_clarity = (trendState !== 'TRANSITIONAL') ? 22 : 12;
-  const sc_level_quality     = (htfDemand && supplyZone) ? 22 : (htfDemand || supplyZone) ? 15 : 8;
-  const sc_location_clarity  = (hasLostSupply || hasMinorReclaim) ? 20 : 10;
-  let   sc_evidence_alignment = 18;
-  if (trendState === 'BEAR' && hasMinorReclaim) sc_evidence_alignment -= 4;  // mild contradiction
-  const sc_data_trust        = 18;  // settling-zone caveat means not 25
-  let decision_confidence = sc_structure_clarity + sc_level_quality + sc_location_clarity + sc_evidence_alignment + sc_data_trust;
-  decision_confidence = Math.max(0, Math.min(100, decision_confidence));
-
-  // ── Active structure narrative (CHoCH trigger price) ──
-  const chochPrice = (typeof _chochTriggerPrice === 'number') ? _chochTriggerPrice : null;
-  const activeStructure = chochPrice != null
-    ? `${trendState === 'BEAR' ? 'Bearish' : 'Bullish'} until close ${trendState === 'BEAR' ? 'above' : 'below'} ₹${chochPrice.toFixed(2)}`
-    : 'No CHoCH trigger derived';
-
-  // ── Price location narrative ──
-  const locParts = [];
-  if (hasLostSupply)                                              locParts.push('Below Failed Supply');
-  if (pivotZone && currentPrice && currentPrice > pivotZone.price_hi) locParts.push('Above Pivot Band');
-  if (htfDemand && currentPrice && currentPrice > htfDemand.price_hi) locParts.push('Above HTF Demand');
-  const priceLocation = locParts.length ? locParts.join(' / ') : 'Mid-zone';
-
-  // ── Key Levels Summary table ──
-  const levels = [];
-  if (chochPrice != null) levels.push({ name:'CHoCH LEVEL (FLIP)', price: chochPrice.toFixed(2),                                    cls:'lv-choch'  });
-  if (supplyZone)         levels.push({ name:'HTF SUPPLY ZONE',     price: `${supplyZone.price_lo.toFixed(0)} - ${supplyZone.price_hi.toFixed(0)}`, cls:'lv-supply' });
-  if (pivotZone)          levels.push({ name:'PIVOT ZONE',          price: `${pivotZone.price_lo.toFixed(0)} - ${pivotZone.price_hi.toFixed(0)}`,   cls:'lv-pivot'  });
-  if (htfDemand)          levels.push({ name:'HTF DEMAND ZONE',     price: `${htfDemand.price_lo.toFixed(0)} - ${htfDemand.price_hi.toFixed(0)}`,   cls:'lv-demand' });
+  function _breakdownChips(breakdown, max) {
+    if (!breakdown || !Object.keys(breakdown).length) return '';
+    const parts = Object.entries(breakdown).map(([k, v]) => {
+      const pct = Math.round((v / max) * 100);
+      const label = k.replace(/_/g, ' ');
+      return `<span class="bk-chip" title="${label}: ${v}/${max}"><span class="bk-chip-bar" style="--w:${pct}%"></span><span class="bk-chip-lbl">${_esc(label)}</span><span class="bk-chip-val">${v}</span></span>`;
+    });
+    return `<div class="bk-chips">${parts.join('')}</div>`;
+  }
 
   let html = '';
   html += `<div class="dash-row"><div class="dash-key">STRUCTURE STATE</div><div class="dash-val val-warn">${_esc(structureStateText)}</div></div>`;
   html += `<div class="dash-row"><div class="dash-key">DECISION</div><div class="dash-val ${decisionClass}">${_esc(decision)}</div></div>`;
 
   html += `<div class="dash-row"><div class="dash-key">TRADE READINESS</div>`;
-  html += `<div class="dash-score">${trade_readiness} <span class="dim">/ 100</span></div>`;
-  html += `<div class="dash-breakdown">`;
-  html += `<div>location_quality &nbsp; ${loc_quality}/25</div>`;
-  html += `<div>structure_alignment &nbsp; ${struct_align}/25</div>`;
-  html += `<div>risk_definable &nbsp; ${risk_def}/25</div>`;
-  html += `<div>confirmation_present &nbsp; ${confirmation}/25</div>`;
-  html += `</div></div>`;
+  html += `<div class="dash-score-row"><span class="dash-score-num">${trade_readiness}</span><span class="dash-score-max">/100</span></div>`;
+  html += _scoreBar(trade_readiness, 100, 'sb-warn');
+  html += _breakdownChips(trBreakdown, 25);
+  html += `</div>`;
 
   html += `<div class="dash-row"><div class="dash-key">DECISION CONFIDENCE</div>`;
-  html += `<div class="dash-val">${decision_confidence}% <span class="dim">in ${_esc(decision)}</span></div>`;
-  html += `<div class="dash-breakdown">`;
-  html += `<div>structure_clarity &nbsp; ${sc_structure_clarity}/25</div>`;
-  html += `<div>level_quality &nbsp; ${sc_level_quality}/25</div>`;
-  html += `<div>location_clarity &nbsp; ${sc_location_clarity}/25</div>`;
-  html += `<div>evidence_alignment &nbsp; ${sc_evidence_alignment}/25</div>`;
-  html += `<div>data_trust &nbsp; ${sc_data_trust}/25</div>`;
-  html += `</div></div>`;
+  html += `<div class="dash-score-row"><span class="dash-score-num">${decision_confidence}</span><span class="dash-score-max">%</span><span class="dash-score-in">in ${_esc(decision)}</span></div>`;
+  html += _scoreBar(decision_confidence, 100, 'sb-bull');
+  html += _breakdownChips(dcBreakdown, 25);
+  html += `</div>`;
 
   html += `<div class="dash-row"><div class="dash-key">ACTIVE STRUCTURE</div><div class="dash-text">${_esc(activeStructure)}</div></div>`;
   html += `<div class="dash-row"><div class="dash-key">PRICE LOCATION</div><div class="dash-text">${_esc(priceLocation)}</div></div>`;

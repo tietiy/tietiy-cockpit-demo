@@ -4,13 +4,18 @@
   --gold:#d9a94e; --up:#3fb27f; --down:#e2574c;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
   --serif:'Fraunces',Georgia,serif;
+  /* Inter for sans-serif content (2026-06-03 typography pass) — replaces the
+     all-monospace dashboard that the agent review flagged as one-register clutter.
+     Use --sans for state values + narrative text; --mono only for prices/numbers. */
+  --sans:'Inter','SF Pro Display',ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
-  background:var(--bg); color:var(--text); font-family:var(--mono);
+  background:var(--bg); color:var(--text); font-family:var(--sans);
   font-size:13px; display:flex; flex-direction:column; overflow:hidden;
   -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
 }
 
 /* ---- top bar ---- */
@@ -193,28 +198,115 @@ body{
 .dd-divider{height:1px; background:var(--line); margin:4px 0}
 
 /* ---- Context box (the dynamic "current situation" prose) ---- */
-/* ---- TIE TIY ANALYSIS dashboard panel (right side, replaces prose context box) ---- */
+/* ---- TIE TIY ANALYSIS dashboard panel — typography pass 2026-06-03 ----
+   Sans (Inter) for state values + narrative; mono (IBM Plex Mono) reserved
+   for prices and numbers only. Score breakdowns are now visual bars + chips
+   instead of raw text rows. Compact + scannable. */
 .dash-row{
-  padding:10px 0;
+  padding:9px 0;
   border-bottom:1px solid rgba(255,255,255,0.04);
 }
 .dash-row:last-of-type{ border-bottom:none; }
 .dash-key{
-  font-size:10px; font-weight:600; letter-spacing:1.2px;
+  font-size:9.5px; font-weight:700; letter-spacing:1.4px;
   color:#7d8390; text-transform:uppercase; margin-bottom:5px;
+  font-family:var(--sans);
 }
-.dash-val{ font-size:14px; font-weight:600; color:#e0e6ee; }
+.dash-val{
+  font-size:15px; font-weight:600; color:#e0e6ee;
+  font-family:var(--sans); letter-spacing:0.1px;
+}
 .dash-val.val-warn{ color:#f0a043; }
 .dash-val.val-bull{ color:#5cd286; }
 .dash-val.val-bear{ color:#ff7878; }
 .dash-val.val-dim{ color:#7d8390; }
 .dash-val .dim{ color:#7d8390; font-weight:400; font-size:12px; }
+
+/* Score number + max + qualifier, all on one row */
+.dash-score-row{
+  display:flex; align-items:baseline; gap:4px; line-height:1.0;
+  margin-bottom:6px;
+}
+.dash-score-row .dash-score-num{
+  font-family:var(--mono); font-weight:700; font-size:26px;
+  color:#e0e6ee; letter-spacing:-0.3px;
+}
+.dash-score-row .dash-score-max{
+  font-family:var(--mono); font-size:13px; color:#5d6470; font-weight:500;
+}
+.dash-score-row .dash-score-in{
+  margin-left:auto;
+  font-family:var(--sans); font-size:10px; color:#7d8390;
+  letter-spacing:0.4px; text-transform:uppercase;
+}
+
+/* The 0-100 visual bar — replaces verbose breakdown text */
+.score-bar{
+  height:4px; width:100%;
+  background:rgba(255,255,255,0.05);
+  border-radius:2px; overflow:hidden;
+  margin-bottom:8px;
+}
+.score-bar-fill{
+  height:100%;
+  background:linear-gradient(90deg, #f0a043 0%, #f0c850 100%);
+  border-radius:2px;
+}
+.score-bar.sb-bull .score-bar-fill{
+  background:linear-gradient(90deg, #5cb0ed 0%, #5cd286 100%);
+}
+.score-bar.sb-bear .score-bar-fill{
+  background:linear-gradient(90deg, #ff7878 0%, #f0a043 100%);
+}
+
+/* Breakdown chips — compact horizontal grid replacing the text-rows */
+.bk-chips{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));
+  gap:4px;
+  margin-top:2px;
+}
+.bk-chip{
+  position:relative;
+  display:flex; align-items:center; gap:5px;
+  padding:3px 6px;
+  background:rgba(255,255,255,0.025);
+  border-radius:3px;
+  font-size:9.5px;
+  overflow:hidden;
+}
+.bk-chip-bar{
+  position:absolute; left:0; top:0; bottom:0;
+  width:var(--w, 0%);
+  background:rgba(240,160,67,0.10);
+  z-index:0;
+}
+.bk-chip-lbl{
+  position:relative; z-index:1;
+  color:#9099a8; flex:1;
+  font-family:var(--sans);
+  letter-spacing:0.1px;
+  text-transform:capitalize;
+}
+.bk-chip-val{
+  position:relative; z-index:1;
+  color:#cbd0d8; font-family:var(--mono);
+  font-weight:600; font-size:10px;
+}
+
+.dash-text{
+  font-size:12.5px; color:#cbd0d8; line-height:1.5;
+  font-family:var(--sans); font-weight:500;
+}
+
+/* LEGACY dash-score / dash-breakdown classes — kept so older code paths
+   (e.g. fallback when dashboard_state is absent) still render. Will be
+   removed once the producer is fully on every PIT run. */
 .dash-score{
   font-size:24px; font-weight:700; color:#5cb0ed;
   font-family:var(--mono); line-height:1.1;
 }
 .dash-score .dim{ font-size:13px; color:#7d8390; font-weight:400; }
-.dash-text{ font-size:12px; color:#cbd0d8; line-height:1.5; }
 .dash-breakdown{
   margin-top:6px; padding:6px 8px;
   background:rgba(255,255,255,0.025); border-radius:3px;
