@@ -33,9 +33,10 @@ const EVENT_COLOR_NEUTRAL = '#9aa6b8';  // for TRANSITIONAL trend_before (rare)
 const CATALYST_COLOR     = '#a78bfa';   // muted purple — distinct from structure layer
 const LABEL_TEXT_COLOR   = '#d9a94e';   // gold (rides on top of the gold arrow markers)
 
-// P3-2 palette — translucent so they sit BEHIND the price-action layers visually.
-const SR_SUPPORT_COLOR    = 'rgba(91, 143, 217, 0.55)';   // muted blue
-const SR_RESISTANCE_COLOR = 'rgba(226, 87, 76, 0.55)';    // muted red
+// P3-2 palette — Tier-1 fix-pass-2: switched to the mockup's green/red tokens
+// + bumped alpha so zones are visible against the cyan/violet radial bg.
+const SR_SUPPORT_COLOR    = 'rgba(34, 197, 94, 0.36)';    // green (matches candle-up)
+const SR_RESISTANCE_COLOR = 'rgba(239, 68, 68, 0.36)';    // red (matches candle-down)
 const SR_MAJOR_WIDTH = 2;
 const SR_VALID_WIDTH = 1;
 

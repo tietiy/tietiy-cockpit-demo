@@ -177,15 +177,29 @@ body::before {
 .cmdbar-c { display: flex; align-items: center; gap: 4px; justify-self: center; }
 .cmdbar-r { display: flex; align-items: center; gap: 8px; justify-self: end; min-width: 0; }
 
+/* Brand mark — mockup-style diamond accent (astronomy theme: ◇ stellar mark) */
 .wordmark {
-  font-family: var(--display);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: 18px;
-  letter-spacing: 0.4px;
+  font-size: 14px;
+  letter-spacing: 0.18em;
   color: var(--text);
   white-space: nowrap;
+  display: inline-flex; align-items: baseline; gap: 0;
 }
-.wordmark .dot { color: var(--gold); }
+.wordmark::before {
+  content: '◇';
+  color: var(--accent);
+  text-shadow: 0 0 12px var(--accent);
+  font-size: 16px;
+  margin-right: 8px;
+  animation: stellar-pulse 3.4s ease-in-out infinite;
+}
+@keyframes stellar-pulse {
+  0%, 100% { opacity: 1;   text-shadow: 0 0 12px var(--accent); }
+  50%      { opacity: 0.65; text-shadow: 0 0 22px var(--accent); }
+}
+.wordmark .dot { display: none; }   /* legacy "." accent retired */
 
 .search-wrap { position: relative; flex: 1; max-width: 280px; min-width: 120px; }
 .search-input {
@@ -477,11 +491,16 @@ body::before {
   z-index: 4;
 }
 
-/* Floating chart toolbar (top-right inside chart cell) */
+/* Floating chart toolbar — moved to BOTTOM-LEFT so it stops fighting the
+   cmdbar search input on narrow viewports. Dropdowns open upward. */
 .chart-toolbar {
-  position: absolute; top: 8px; right: 12px;
-  display: flex; align-items: center; gap: 8px;
+  position: absolute; bottom: 8px; left: 12px;
+  display: flex; align-items: center; gap: 6px;
   z-index: 5;
+}
+.chart-toolbar .dd-body {
+  /* Open UPWARD (above the summary) since the toolbar is at the bottom now */
+  top: auto; bottom: 36px;
 }
 
 .dd-menu summary {
@@ -782,6 +801,126 @@ body::before {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 8px;
 }
+
+/* ╔═══ TILE GARDEN — 4 × 2 always-visible mini-cards (no tabs) ═══════════╗ */
+.dock-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows:    1fr 1fr;
+  gap: 8px;
+  height: 100%;
+  padding: 10px 12px;
+}
+@media (max-width: 1023px) {
+  .dock-tiles { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, minmax(110px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .dock-tiles { grid-template-columns: 1fr; grid-template-rows: repeat(8, minmax(96px, auto)); }
+}
+
+.dock-tile {
+  background: rgba(0,0,0,0.22);
+  border: 1px solid var(--ink-2);
+  border-radius: 9px;
+  padding: 8px 10px 7px;
+  display: flex; flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+  min-height: 0;
+}
+.dock-tile:hover {
+  border-color: var(--accent);
+  background: rgba(92, 225, 230, 0.06);
+  box-shadow: 0 0 18px rgba(92, 225, 230, 0.10);
+}
+.dock-tile:hover .dt-arrow { color: var(--accent); transform: translateX(2px); }
+
+.dt-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 1.8px;
+  color: var(--accent); text-transform: uppercase;
+  border-bottom: 1px solid var(--ink-2);
+  padding-bottom: 4px; margin-bottom: 2px;
+}
+.dt-arrow {
+  font-family: var(--mono); font-size: 14px; font-weight: 400;
+  color: var(--dimmer); transition: color 0.15s, transform 0.15s;
+}
+.dt-body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  overflow: hidden;
+}
+.dt-row {
+  display: flex; align-items: baseline; gap: 6px;
+  font-family: var(--mono); font-size: 11px;
+  white-space: nowrap; overflow: hidden;
+}
+.dt-row .dt-k { color: var(--dim); font-size: 10px; min-width: 48px; font-family: var(--sans); }
+.dt-row .dt-v { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.dt-row .dt-v.up   { color: var(--up); }
+.dt-row .dt-v.down { color: var(--down); }
+.dt-row .dt-v.warn { color: var(--warn); }
+.dt-row.dt-title { font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: 0.4px; color: var(--text); text-transform: uppercase; }
+.dt-row.dt-bullet { color: var(--text-2); }
+.dt-row.dt-count { color: var(--dim); font-size: 10.5px; }
+.dt-row.dt-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-pill { background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 3px; font-size: 9.5px; font-weight: 700; }
+.dt-dim { color: var(--dimmer); font-size: 11px; font-style: italic; }
+.dt-more { color: var(--dim); font-size: 10px; margin-top: 2px; }
+
+.dt-news-row {
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: baseline; gap: 6px;
+  font-size: 11px;
+}
+.dt-news-date { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.dt-news-head { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Tile modal — re-uses the per-tab renderers with full real estate */
+.dock-modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.66);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: center;
+  animation: nm-fade 0.18s ease-out;
+}
+.dock-modal {
+  position: relative;
+  width: min(1080px, calc(100vw - 64px));
+  height: min(72vh, 680px);
+  background: var(--card-bg);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  border: 1px solid var(--ink-3);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px 22px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px var(--ink-2) inset;
+  color: var(--text);
+  display: flex; flex-direction: column;
+}
+.dm-close {
+  position: absolute; top: 12px; right: 14px;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: transparent; border: 1px solid var(--ink-2);
+  color: var(--dim); font-size: 18px; line-height: 1;
+  cursor: pointer; transition: 0.15s;
+}
+.dm-close:hover { color: var(--accent); border-color: var(--accent); }
+.dm-head {
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  letter-spacing: 2.2px; color: var(--accent); text-transform: uppercase;
+  border-bottom: 1px solid var(--ink-2); padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.dm-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding-right: 4px;
+}
+.dm-body .news-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 
 /* ── Levels tab — confluence zones ──────────────────────────────────────── */
 .lv-card {

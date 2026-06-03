@@ -563,9 +563,11 @@ function _addPriceChip(price, chipColor) {
 let currentFibLineRefs = [];
 
 // Z-band colors for the SR zone brackets (top line + bottom line per zone).
-const SR_BRACKET_COLOR_RESISTANCE = 'rgba(226, 87, 76, 0.85)';   // red
-const SR_BRACKET_COLOR_SUPPORT    = 'rgba(91, 143, 217, 0.85)';  // blue
-const SR_BRACKET_COLOR_HISTORICAL = 'rgba(232, 200, 112, 0.80)'; // gold dashed
+// Tier-1 fix-pass-2: switched to mockup green/red/cyan tokens so brackets stay
+// readable on the cyan+violet radial bg.
+const SR_BRACKET_COLOR_RESISTANCE = 'rgba(239, 68, 68, 0.92)';   // red
+const SR_BRACKET_COLOR_SUPPORT    = 'rgba(34, 197, 94, 0.92)';   // green
+const SR_BRACKET_COLOR_HISTORICAL = 'rgba(92, 225, 230, 0.90)';  // cyan (was gold) — dashed
 
 const statusEl   = document.getElementById('status');
 const statusText = document.getElementById('status-text');
@@ -1029,61 +1031,221 @@ function _renderRail() {
   rail.innerHTML = html;
 }
 
-// ─── Bottom dock — tabbed (Levels · Plans · News · Volume · Relative · Setup) ─
-let _currentDockTab = 'levels';
-let _dockTabInitDone = false;
+// ═════════════════════════════════════════════════════════════════════════════
+//  TILE-GARDEN DOCK  (2026-06-03, fix-pass-2)
+//
+//  Operator complaint: "tabs hide info. Show everything, nothing left behind."
+//  Solution: bottom dock becomes 8 ALWAYS-VISIBLE summary tiles. Click any
+//  tile → opens a full-screen modal with the producer's complete view
+//  (re-using the existing per-tab renderers).
+//
+//  Tiles: Confluence · Plans · News · Relative · Regime · Fibs · Volume · Setup
+//
+//  No tabs. No hidden state. Information density wins over chrome.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const _DOCK_TILE_DEFS = [
+  { key: 'confluence', title: 'CONFLUENCE',  render: _tileConfluence,  modal: _renderLevelsTab   },
+  { key: 'plans',      title: 'TRADE PLANS', render: _tilePlans,       modal: _renderPlansTab    },
+  { key: 'news',       title: 'NEWS',        render: _tileNews,        modal: _renderNewsTab     },
+  { key: 'relative',   title: 'RELATIVE',    render: _tileRelative,    modal: _renderRelativeTab },
+  { key: 'regime',     title: 'REGIME',      render: _tileRegime,      modal: _renderRegimeFullTab },
+  { key: 'fibs',       title: 'FIBS',        render: _tileFibs,        modal: _renderFibsTab     },
+  { key: 'volume',     title: 'VOLUME',      render: _tileVolume,      modal: _renderVolumeTab   },
+  { key: 'setup',      title: 'SETUP',       render: _tileSetup,       modal: _renderSetupTab    },
+];
 
 function _renderDock() {
-  const dockBody = document.getElementById('dock-body');
-  if (!dockBody) return;
+  const tiles = document.getElementById('dock-tiles');
+  if (!tiles) return;
   if (!currentSymbol || !currentBars.length) {
-    dockBody.innerHTML = `<div class="dock-empty">load a symbol to populate</div>`;
+    tiles.innerHTML = `<div class="dock-empty">load a symbol to populate</div>`;
     return;
   }
-
   const outputs = currentPrimitives || {};
-
-  // News badge count
-  const newsPrims = (outputs.news_marker?.primitives || []).filter(p => p.kind === 'news_marker');
-  const newsBadge = document.getElementById('badge-news');
-  if (newsBadge) newsBadge.textContent = newsPrims.length ? String(newsPrims.length) : '';
-
-  // Default tab: news IF fresh news in last 3 trading days, else levels.
-  // Auto-pick only on first load per symbol; respect manual user tab choice after.
-  if (!_dockTabInitDone) {
-    const lastT = currentBars[currentBars.length - 1].time;
-    const cut = lastT - (4.5 * 86400);   // ≈3 trading days
-    const fresh = newsPrims.some(p => p.anchors[0].t >= cut);
-    _currentDockTab = fresh ? 'news' : 'levels';
-    _dockTabInitDone = true;
-  }
-
-  // Highlight active tab
-  document.querySelectorAll('.dock-tab').forEach(t => {
-    if (t.classList.contains('dim')) return;
-    t.classList.toggle('active', t.dataset.tab === _currentDockTab);
-  });
-
-  // Dispatch to tab renderer
-  const RENDERERS = {
-    levels:   _renderLevelsTab,
-    plans:    _renderPlansTab,
-    news:     _renderNewsTab,
-    fibs:     _renderFibsTab,
-    volume:   _renderVolumeTab,
-    relative: _renderRelativeTab,
-    setup:    _renderSetupTab,
-    journal:  _renderJournalTab,
-  };
-  const fn = RENDERERS[_currentDockTab] || _renderLevelsTab;
-  dockBody.innerHTML = fn(outputs, currentBars);
-
-  // Tabs that need post-injection canvas drawing
-  if (_currentDockTab === 'fibs') {
-    // Defer to next tick so the canvas exists in DOM before draw
-    requestAnimationFrame(() => _drawFibMiniChart(outputs));
-  }
+  tiles.innerHTML = _DOCK_TILE_DEFS.map(def => {
+    const body = def.render(outputs, currentBars);
+    return `<div class="dock-tile" data-tile="${def.key}">
+              <div class="dt-head">${def.title}<span class="dt-arrow">›</span></div>
+              <div class="dt-body">${body}</div>
+            </div>`;
+  }).join('');
 }
+
+// ─── Per-tile summary renderers (~3-4 lines each) ──────────────────────────
+
+function _tileConfluence(outputs, bars) {
+  const zones = (outputs.sr_zones?.primitives || []).filter(p => p.kind === 'sr_zone');
+  if (!zones.length) return `<div class="dt-dim">No zones</div>`;
+  const confPrims = (outputs.confluence?.primitives || []).filter(p => p.kind === 'confluence');
+  const findConf = z => confPrims.find(c => c.price_lo === z.price_lo && c.price_hi === z.price_hi);
+  const sorted = zones.slice().sort((a, b) => {
+    const sa = findConf(a)?.factors?.confluence_score || 0;
+    const sb = findConf(b)?.factors?.confluence_score || 0;
+    return sb - sa;
+  });
+  const labelOf = z => {
+    const f = z.factors || {};
+    if (f.htf_confirmed) return 'HTF DEMAND';
+    if (f.lifecycle === 'failed_reclaim') return 'HTF SUPPLY';
+    if (f.classification === 'minor_support') return 'PIVOT';
+    if ((f.classification || '').includes('resistance')) return 'RESISTANCE';
+    return 'ZONE';
+  };
+  return sorted.slice(0, 3).map(z => {
+    const cf = findConf(z);
+    const score = cf ? `<span class="dt-pill">${cf.factors.confluence_score}</span>` : '';
+    return `<div class="dt-row">
+              <span class="dt-k">${_esc(labelOf(z))}</span>
+              <span class="dt-v">${z.price_lo.toFixed(0)}–${z.price_hi.toFixed(0)}</span>
+              ${score}
+            </div>`;
+  }).join('') + (zones.length > 3 ? `<div class="dt-more">+${zones.length - 3} more →</div>` : '');
+}
+
+function _tilePlans(outputs, bars) {
+  const setupPrims = (outputs.setup?.primitives || []).filter(p => p.kind === 'setup');
+  if (!setupPrims.length || setupPrims[0].factors?.family === 'NO_SETUP') {
+    return `<div class="dt-dim">No active setup — waiting for formation</div>`;
+  }
+  const sp = setupPrims[0];
+  const f = sp.factors || {};
+  return `<div class="dt-row dt-title">${_esc((f.setup_name || 'setup').replace(/_/g,' ').toUpperCase())}</div>
+          <div class="dt-row"><span class="dt-k">Status</span><span class="dt-v">${_esc(f.status || 'forming')}</span></div>
+          <div class="dt-row"><span class="dt-k">Score</span><span class="dt-v">${f.confidence_score ?? 0}/100</span></div>
+          <div class="dt-row dt-clip"><span class="dt-k">Trigger</span><span class="dt-v">${_esc(f.trigger || '—')}</span></div>`;
+}
+
+function _tileNews(outputs, bars) {
+  const news = (outputs.news_marker?.primitives || []).filter(p => p.kind === 'news_marker');
+  if (!news.length) return `<div class="dt-dim">No news</div>`;
+  const sorted = news.slice().sort((a, b) => b.anchors[0].t - a.anchors[0].t);
+  const head = `<div class="dt-row dt-count">${news.length} items · click for all</div>`;
+  return head + sorted.slice(0, 2).map(p => {
+    const f = p.factors || {};
+    const date = _fmtNewsDate(p.anchors[0].t);
+    const sent = (f.sentiment || 'neutral').toLowerCase();
+    return `<div class="dt-news-row">
+              <span class="dt-news-date">${_esc(date)}</span>
+              <span class="dt-news-head dt-clip">${_esc(f.headline || '')}</span>
+              <span class="nc-sent ${_esc(sent)}">${sent === 'positive' ? '▲' : sent === 'negative' ? '▼' : '◦'}</span>
+            </div>`;
+  }).join('');
+}
+
+function _tileRelative(outputs, bars) {
+  const rsF = outputs.relative_strength?.facts || {};
+  if (!rsF.rs_classification) return `<div class="dt-dim">no RS data</div>`;
+  const fmt = (n) => typeof n === 'number' ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : '—';
+  const cls = (n) => typeof n === 'number' ? (n >= 0 ? 'up' : 'down') : '';
+  return `<div class="dt-row dt-title up-or-dn-${rsF.rs_score >= 6 ? 'up' : 'down'}">${_esc(rsF.rs_classification.replace(/_/g,' ').toUpperCase())}</div>
+          <div class="dt-row"><span class="dt-k">10d</span><span class="dt-v ${cls(rsF.rs_10d_pct)}">${fmt(rsF.rs_10d_pct)}</span></div>
+          <div class="dt-row"><span class="dt-k">20d</span><span class="dt-v ${cls(rsF.rs_20d_pct)}">${fmt(rsF.rs_20d_pct)}</span></div>
+          <div class="dt-row"><span class="dt-k">50d</span><span class="dt-v ${cls(rsF.rs_50d_pct)}">${fmt(rsF.rs_50d_pct)}</span></div>`;
+}
+
+function _tileRegime(outputs, bars) {
+  const stk = outputs.stock_regime?.facts || {};
+  const mkt = outputs.regime?.facts || {};
+  const htf = outputs.structure_label?.facts?.trend_state || '—';
+  const pill = (k, v, color) => {
+    const colCls = color === 'GREEN' ? 'up' : (color === 'RED' || color === 'DEEP_RED') ? 'down' : 'warn';
+    return `<div class="dt-row"><span class="dt-k">${k}</span><span class="dt-v ${colCls}">${_esc(v)}</span></div>`;
+  };
+  return pill('Stock', stk.stock_regime_color || '—', stk.stock_regime_color)
+       + pill('Market', mkt.regime_color || '—', mkt.regime_color)
+       + pill('HTF', htf, htf === 'BULL' ? 'GREEN' : (htf === 'BEAR' ? 'RED' : 'AMBER'));
+}
+
+function _tileFibs(outputs, bars) {
+  const chochP = (typeof _chochTriggerPrice === 'number') ? _chochTriggerPrice : null;
+  const chochT = (typeof _chochTriggerT === 'number') ? _chochTriggerT : null;
+  if (chochP === null || !bars.length) return `<div class="dt-dim">No active swing</div>`;
+  const trend = outputs.structure_label?.facts?.trend_state || 'TRANSITIONAL';
+  const after = bars.filter(b => b.time >= chochT);
+  if (!after.length) return `<div class="dt-dim">No bars after CHoCH</div>`;
+  let hi, lo;
+  if (trend === 'BEAR') { hi = chochP; lo = Math.min(...after.map(b => b.low)); }
+  else                  { lo = chochP; hi = Math.max(...after.map(b => b.high)); }
+  const range = hi - lo;
+  const rangePct = (range / lo) * 100;
+  return `<div class="dt-row"><span class="dt-k">Swing Hi</span><span class="dt-v">₹${hi.toFixed(2)}</span></div>
+          <div class="dt-row"><span class="dt-k">Swing Lo</span><span class="dt-v">₹${lo.toFixed(2)}</span></div>
+          <div class="dt-row"><span class="dt-k">Range</span><span class="dt-v">${range.toFixed(2)} (${rangePct.toFixed(1)}%)</span></div>
+          <div class="dt-row dt-dim">${trend === 'BEAR' ? 'down→retrace up' : 'up→retrace down'}</div>`;
+}
+
+function _tileVolume(outputs, bars) {
+  const zones = (outputs.sr_zones?.primitives || []).filter(p => p.kind === 'sr_zone');
+  const supplyZone = zones.find(z => (z.factors?.classification || '').includes('resistance'));
+  const htfDemand  = zones.find(z => z.factors?.htf_confirmed && (z.factors?.classification || '').includes('support'));
+  const pivotZone  = zones.find(z => z.factors?.classification === 'minor_support');
+  const bullets = [];
+  if (supplyZone?.factors?.lifecycle === 'failed_reclaim') bullets.push('Failed-reclaim supply');
+  if (htfDemand) bullets.push('HTF demand confirmed');
+  if (pivotZone?.factors?.lifecycle === 'failed_breakdown') bullets.push('Pivot reclaimed');
+  bullets.push('VP profile: pending');
+  return bullets.slice(0, 4).map(b =>
+    `<div class="dt-row dt-bullet">▸ <span class="dt-clip">${_esc(b)}</span></div>`
+  ).join('');
+}
+
+function _tileSetup(outputs, bars) {
+  const setupPrims = (outputs.setup?.primitives || []).filter(p => p.kind === 'setup');
+  if (!setupPrims.length || setupPrims[0].factors?.family === 'NO_SETUP') {
+    return `<div class="dt-dim">State: idle</div>`;
+  }
+  const sp = setupPrims[0];
+  const f = sp.factors || {};
+  const conds = (f.conditions_met || []).slice(0, 2).join(' · ') || '—';
+  return `<div class="dt-row"><span class="dt-k">Family</span><span class="dt-v">${_esc(f.family || '—')}</span></div>
+          <div class="dt-row"><span class="dt-k">Status</span><span class="dt-v">${_esc(f.status || 'forming')}</span></div>
+          <div class="dt-row dt-clip"><span class="dt-k">Met</span><span class="dt-v">${_esc(conds)}</span></div>`;
+}
+
+// Full regime tab (used by modal — more detail than tile)
+function _renderRegimeFullTab(outputs, bars) {
+  const stk = outputs.stock_regime?.facts || {};
+  const mkt = outputs.regime?.facts || {};
+  const fmtPct = n => typeof n === 'number' ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : '—';
+  return `<table class="rs-table"><thead><tr><th>Scope</th><th>Color</th><th>State</th><th>Cell</th><th>10d Mom</th><th>Quality</th></tr></thead>
+    <tbody>
+      <tr><td>Stock</td><td>${_esc(stk.stock_regime_color || '—')}</td><td>${_esc(stk.stock_regime_state_v1 || '—')}</td><td>${_esc(stk.stock_regime_cell || '—')}</td><td>${fmtPct(stk.stock_momentum_10d_pct)}</td><td>${_esc(String(stk.stock_regime_quality_score ?? '—'))}/100</td></tr>
+      <tr><td>Market</td><td>${_esc(mkt.regime_color || '—')}</td><td>${_esc(mkt.regime_state_v1 || '—')}</td><td>${_esc(mkt.regime_cell || '—')}</td><td>${fmtPct(mkt.momentum_10d_pct)}</td><td>${_esc(String(mkt.regime_quality_score ?? '—'))}/100</td></tr>
+    </tbody></table>`;
+}
+
+// ─── Tile click → full modal (re-uses the per-tab renderers) ──────────────
+function _openDockTileModal(tileKey) {
+  const def = _DOCK_TILE_DEFS.find(d => d.key === tileKey);
+  if (!def) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'dock-modal-overlay';
+  overlay.innerHTML = `
+    <div class="dock-modal" role="dialog" aria-modal="true">
+      <button class="dm-close" aria-label="Close">×</button>
+      <div class="dm-head">${_esc(def.title)}</div>
+      <div class="dm-body" id="dm-body"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const body = overlay.querySelector('#dm-body');
+  body.innerHTML = def.modal(currentPrimitives || {}, currentBars);
+  // Wire close
+  const close = () => overlay.remove();
+  overlay.querySelector('.dm-close').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+  });
+  // Special: Fibs modal needs canvas redraw after injection
+  if (tileKey === 'fibs') requestAnimationFrame(() => _drawFibMiniChart(currentPrimitives || {}));
+}
+
+// Delegate clicks on dock tiles → open modal
+document.addEventListener('click', e => {
+  const tile = e.target.closest && e.target.closest('.dock-tile');
+  if (tile && tile.dataset && tile.dataset.tile) _openDockTileModal(tile.dataset.tile);
+});
 
 // ─── Tab renderers ──────────────────────────────────────────────────────────
 
@@ -1237,6 +1399,30 @@ function _renderNewsTab(outputs, bars) {
   return `<div class="news-grid">${cards}</div>`;
 }
 
+// Resolve a (possibly relative) news URL into an absolute one. The producer emits
+// "/market/stock-market-news/…" and "source"="indianapi/livemint" — we map the
+// known sources to their hostname so the operator can actually click through.
+const _NEWS_HOSTS = {
+  livemint:        'https://www.livemint.com',
+  moneycontrol:    'https://www.moneycontrol.com',
+  economictimes:   'https://economictimes.indiatimes.com',
+  businessstandard:'https://www.business-standard.com',
+  ndtv:            'https://www.ndtv.com',
+  hindubusinessline:'https://www.thehindubusinessline.com',
+  cnbctv18:        'https://www.cnbctv18.com',
+  yfinance:        null,   // yfinance URLs are already absolute
+};
+function _resolveNewsUrl(rawUrl, source) {
+  if (!rawUrl) return null;
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+  if (!rawUrl.startsWith('/')) return null;
+  const src = String(source || '').toLowerCase();
+  for (const key in _NEWS_HOSTS) {
+    if (_NEWS_HOSTS[key] && src.includes(key)) return _NEWS_HOSTS[key] + rawUrl;
+  }
+  return null;
+}
+
 // ─── News modal — click a card to expand the full body ────────────────────
 function _openNewsModal(t) {
   const p = _newsItemsByT.get(String(t));
@@ -1247,8 +1433,10 @@ function _openNewsModal(t) {
   const impact = (f.impact || 'medium').toLowerCase();
   const sent = (f.sentiment || 'neutral').toLowerCase();
   const conf = f.price_confirmation && f.price_confirmation !== 'n/a' ? f.price_confirmation : null;
-  const body = f.body || f.summary || f.headline || '';
-  const link = f.url || f.link || null;
+  // Producer often only emits headline (no body); fall back so the modal
+  // never appears empty.
+  const body = f.body || f.summary || f.description || f.headline || '(no body — source link below)';
+  const link = _resolveNewsUrl(f.url || f.link, f.source);
   const overlay = document.createElement('div');
   overlay.className = 'news-modal-overlay';
   overlay.innerHTML = `
@@ -1404,15 +1592,7 @@ function _renderJournalTab(outputs, bars) {
   </div>`;
 }
 
-// ─── Wire dock tab click handlers (once at module load) ───────────────────
-document.querySelectorAll('.dock-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    if (tab.classList.contains('dim')) return;
-    _currentDockTab = tab.dataset.tab;
-    _dockTabInitDone = true;   // user picked → no more auto-default
-    _renderDock();
-  });
-});
+// (Tier-1 fix-pass-2: tabs replaced by tile-garden — no tab click handler needed)
 
 // ─── Click-outside closes Layers / Producers <details> dropdowns ──────────
 // Native <details> only toggles when its <summary> is clicked. Operators
