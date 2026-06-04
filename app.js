@@ -687,20 +687,21 @@ function _drawV2PlotItems() {
     if (xEnd === null)   xEnd = w;
 
     if (it.item_kind === 'decision_badge') {
-      // V3.4 — decision PANEL: small bordered rectangle, TOP-RIGHT.
-      // Operator: "put this on other side in a small rectangle text box type."
-      // One single rectangle, all text packed inside, fixed-width 260px.
+      // V3.5 — decision PANEL: bordered rectangle, top-LEFT, WITH DIRECTION.
+      // Operator: "move it to other side of chart" + "add direction of stock,
+      // explaining potential rr to which direction and trigger 1.98%."
       //
-      //   ┌──────────────────────────────────┐
-      //   │ STAND DOWN                       │  ← verb in colored band
-      //   │ Conf 95% · Potential RR 2.91     │  ← stat line
-      //   │ Trigger 1340.60 · +26pts (+1.98%)│  ← trigger line (gold)
-      //   │ ─────────────────                │
-      //   │ WHY                              │
-      //   │ [TRIGGER]   Need close above 1341│
-      //   │ [LEVEL]     At active demand …   │
-      //   │ [STRUCTURE] Structure bearish    │
-      //   └──────────────────────────────────┘
+      //   ┌────────────────────────────────────┐
+      //   │ STAND DOWN                         │  ← verb (colored band)
+      //   │ BIAS  LONG ↑  (counter-trend)      │  ← NEW: direction line
+      //   │ Conf 95%  ·  Potential RR ↑ 2.91   │  ← ↑ on RR (direction)
+      //   │ Trigger ↑ 1340.60  ·  +26pts +1.98%│  ← ↑ on trigger (direction)
+      //   │ ─────────────────                  │
+      //   │ WHY                                │
+      //   │ [TRIGGER]   Need close above 1341  │
+      //   │ [LEVEL]     At active demand 1285-…│
+      //   │ [STRUCTURE] Structure bearish      │
+      //   └────────────────────────────────────┘
       const panel = _v2PlotMeta?.decision_panel || {};
       const verb  = (it.label || 'WAIT').toUpperCase();
       let verbCol = '34, 197, 94';
@@ -709,20 +710,43 @@ function _drawV2PlotItems() {
       else if (verb === 'WAIT')    verbCol = '174, 182, 194';
       else if (verb === 'ARM')     verbCol = '92, 225, 230';
 
+      // Direction derivation:
+      //   trigger.pts > 0  → conditional LONG (need upside reclaim)
+      //   trigger.pts < 0  → conditional SHORT (need downside break)
+      // Combined with trend → label whether the trade is WITH or COUNTER trend.
+      const trig = panel.trigger;
+      let bias = null, biasCol = '174, 182, 194', biasArrow = '', biasNote = '';
+      if (trig && typeof trig.pts === 'number') {
+        if (trig.pts > 0) {
+          bias = 'LONG'; biasArrow = '↑'; biasCol = '34, 197, 94';
+        } else if (trig.pts < 0) {
+          bias = 'SHORT'; biasArrow = '↓'; biasCol = '239, 68, 68';
+        }
+      }
+      const trendState = _v2PlotMeta?.trend_state;
+      if (bias === 'LONG'  && trendState === 'BEAR') biasNote = '(counter-trend)';
+      else if (bias === 'SHORT' && trendState === 'BULL') biasNote = '(counter-trend)';
+      else if (bias === 'LONG'  && trendState === 'BULL') biasNote = '(with trend)';
+      else if (bias === 'SHORT' && trendState === 'BEAR') biasNote = '(with trend)';
+
       // ── Build all text lines first so we can compute the box height ──
-      const lines = [];   // {text, color, font, weight}
-      lines.push({kind: 'verb',    text: verb, color: verbCol});
+      const lines = [];
+      lines.push({kind: 'verb', text: verb, color: verbCol});
+      if (bias) {
+        lines.push({kind: 'bias',
+                    text: `BIAS  ${bias} ${biasArrow}  ${biasNote}`.trim(),
+                    color: biasCol});
+      }
       const conf = panel.confidence;
       const rr   = panel.rr_preview;
       const stat = [];
       if (typeof conf === 'number') stat.push(`Conf ${conf}%`);
-      if (typeof rr === 'number')   stat.push(`Potential RR ${rr}`);
+      if (typeof rr === 'number')   stat.push(`Potential RR ${biasArrow} ${rr}`.trim());
       if (stat.length) lines.push({kind: 'stat', text: stat.join('  ·  '), color: verbCol});
-      const trig = panel.trigger;
       if (trig && typeof trig.price === 'number') {
         const sign = trig.pts >= 0 ? '+' : '';
         lines.push({kind: 'trig',
-                    text: `Trigger ${trig.price.toFixed(2)}  ·  ${sign}${trig.pts.toFixed(0)}pts (${sign}${trig.percent.toFixed(2)}%)`,
+                    text: `Trigger ${biasArrow} ${trig.price.toFixed(2)}  ·  ${sign}${trig.pts.toFixed(0)}pts (${sign}${trig.percent.toFixed(2)}%)`.trim(),
                     color: '245, 200, 90'});
       }
       const reasons = (panel.reasons || []).slice(0, 3);
@@ -736,7 +760,7 @@ function _drawV2PlotItems() {
         }
       }
 
-      const boxW       = 260;
+      const boxW       = 280;          // wider — direction line needs room
       const padX       = 10;
       const padTop     = 8;
       const padBottom  = 8;
@@ -751,7 +775,7 @@ function _drawV2PlotItems() {
       }
       bodyH += padBottom;
 
-      const boxX = w - boxW - 12;
+      const boxX = 12;                 // V3.5 — moved to LEFT side
       const boxY = 10;
 
       // ── Box background + border ──
@@ -795,9 +819,9 @@ function _drawV2PlotItems() {
           y += lineH;
           continue;
         }
-        // stat / trig / reason — plain text line
-        const fontSize = (ln.kind === 'stat' || ln.kind === 'trig') ? 11 : 10.5;
-        const fontWeight = (ln.kind === 'stat' || ln.kind === 'trig') ? 'bold ' : '';
+        // stat / trig / reason / bias — plain text line
+        const fontSize = (ln.kind === 'stat' || ln.kind === 'trig' || ln.kind === 'bias') ? 11 : 10.5;
+        const fontWeight = (ln.kind === 'stat' || ln.kind === 'trig' || ln.kind === 'bias') ? 'bold ' : '';
         overlayCtx.font = `${fontWeight}${fontSize}px "JetBrains Mono", monospace`;
         let toRender = ln.text;
         while (overlayCtx.measureText(toRender).width > boxW - padX * 2 - 4) {
