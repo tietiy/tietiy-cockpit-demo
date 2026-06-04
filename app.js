@@ -176,6 +176,7 @@ async function _loadAndDrawV2() {
         atr14:         res.atr14,
         trend_state:   res.trend_state,
         decision_panel: res.decision_panel || null,    // V3
+        recent_events: res.recent_events || [],        // Phase 1.D §3 CHANGED TODAY
       };
       console.info(`[V2] ${currentSymbol} @ ${CURRENT_DATE}: ${res.n_raw_objects} raw → ${_v2PlotItems.length} chart items`);
     }
@@ -757,6 +758,35 @@ function _drawV2PlotItems() {
           const cat = (r.category || '').toUpperCase();
           const txt = (r.text || '').trim();
           lines.push({kind: 'reason', text: `${cat ? '['+cat+'] ' : ''}${txt}`, color: '230, 233, 240'});
+        }
+      }
+
+      // Phase 1.D Session 3 — "CHANGED TODAY" surface for state-engine events.
+      // Hidden when there are no transitions today (cold day).
+      const recents = (_v2PlotMeta?.recent_events || []).slice(0, 4);
+      if (recents.length) {
+        lines.push({kind: 'sep'});
+        lines.push({kind: 'hdr', text: 'CHANGED TODAY', color: '174, 182, 194'});
+        // Severity → color so BROKEN reads red, CONFIRMED reads green, etc.
+        const SEV_COLOR = {
+          broken: '239, 68, 68', dead: '239, 68, 68', failed: '239, 68, 68',
+          flipped_to_supply: '245, 200, 90', flipped_to_demand: '245, 200, 90',
+          violated: '245, 200, 90', weakened: '245, 200, 90',
+          under_attack: '245, 200, 90',
+          revived: '92, 225, 230', retesting: '92, 225, 230',
+          confirmed: '34, 197, 94', active_context: '34, 197, 94',
+          reaction_confirmed: '34, 197, 94', respected: '34, 197, 94',
+          tested: '174, 182, 194',
+        };
+        for (const ev of recents) {
+          const sa = (ev.state_after || '').toUpperCase().replace(/_/g, ' ');
+          const ts = ev.type_short || ev.type || '?';
+          const px = (typeof ev.price === 'number')
+            ? ` ${ev.price < 100 ? ev.price.toFixed(2) : ev.price.toFixed(0)}` : '';
+          const text = `• ${ts}${px} ${sa}`;
+          lines.push({kind: 'reason',
+                      text: text,
+                      color: SEV_COLOR[ev.state_after] || '230, 233, 240'});
         }
       }
 
