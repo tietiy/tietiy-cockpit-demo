@@ -673,6 +673,7 @@ function _drawV2PlotItems() {
     target:        { fill: '174, 182, 194', stroke: '174, 182, 194', text: '174, 182, 194' },
     trigger:       { fill: '245, 200, 90',  stroke: '245, 200, 90', text: '245, 200, 90' },
     invalidation:  { fill: '239, 68, 68',   stroke: '239, 68, 68',  text: '239, 68, 68'  },
+    trendline:     { fill: '167, 139, 250', stroke: '167, 139, 250', text: '167, 139, 250' },  // violet (V2 §41 #7)
     level:         { fill: '92, 225, 230',  stroke: '92, 225, 230', text: '92, 225, 230' },
   };
 
@@ -738,6 +739,54 @@ function _drawV2PlotItems() {
         overlayCtx.font = `10px "JetBrains Mono", monospace`;
         overlayCtx.fillStyle = `rgba(${c.text}, ${0.62 * op})`;
         overlayCtx.fillText(it.sub_label, xEnd - labelW + 2, labelY + 14);
+      }
+      continue;
+    }
+
+    if (it.item_kind === 'trendline' && Array.isArray(it.anchor_pairs)
+        && it.anchor_pairs.length >= 2) {
+      // V2 §14 + §41 #7 — render the trendline as a DIAGONAL line connecting
+      // its two anchor pivots, projected forward to the current bar.
+      const pairs = it.anchor_pairs.slice().sort((a, b) => a.t - b.t);
+      const a0 = pairs[0], a1 = pairs[pairs.length - 1];
+      const x0 = ts.timeToCoordinate(a0.t);
+      const x1 = ts.timeToCoordinate(a1.t);
+      const y0 = candle.priceToCoordinate(a0.price);
+      const y1 = candle.priceToCoordinate(a1.price);
+      if (x0 !== null && x1 !== null && y0 !== null && y1 !== null && x1 > x0) {
+        // Project the line forward to the right edge of the visible chart
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const xForward = w - 8;
+        const yForward = y1 + (dy / dx) * (xForward - x1);
+        overlayCtx.strokeStyle = `rgba(${c.stroke}, ${0.85 * op})`;
+        overlayCtx.lineWidth = 1.6;
+        overlayCtx.setLineDash([]);
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(x0, y0);
+        overlayCtx.lineTo(x1, y1);
+        overlayCtx.lineTo(xForward, yForward);
+        overlayCtx.stroke();
+
+        // Label at the projected right-edge point
+        const label = it.label || 'Trendline';
+        overlayCtx.font = `bold 11px "JetBrains Mono", monospace`;
+        const labelW = overlayCtx.measureText(label).width + 12;
+        const labelY = Math.max(12, Math.min(h - 12, yForward));
+        overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.93 * op})`;
+        overlayCtx.fillRect(xForward - labelW - 4, labelY - 9, labelW, 18);
+        overlayCtx.strokeStyle = `rgba(${c.stroke}, ${op})`;
+        overlayCtx.lineWidth = 1;
+        overlayCtx.strokeRect(xForward - labelW - 4, labelY - 9, labelW, 18);
+        overlayCtx.fillStyle = `rgba(${c.text}, ${op})`;
+        overlayCtx.textAlign = 'left';
+        overlayCtx.textBaseline = 'middle';
+        overlayCtx.fillText(label, xForward - labelW + 2, labelY + 0.5);
+        if (it.sub_label) {
+          overlayCtx.font = `10px "JetBrains Mono", monospace`;
+          overlayCtx.fillStyle = `rgba(${c.text}, ${0.62 * op})`;
+          overlayCtx.fillText(it.sub_label, xForward - labelW + 2, labelY + 14);
+        }
       }
       continue;
     }
