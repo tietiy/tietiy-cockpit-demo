@@ -156,6 +156,14 @@ let _v2PlotMeta = null;
 // Phase 1.C Session 8 — current view mode (Execution / Analysis / History).
 // Persists in localStorage so the operator's last choice survives reloads.
 let _v2ViewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('tietiy_view_mode')) || 'execution';
+// Decision-panel collapsed state (operator: "info is getting long to block
+// the chart"). When true, the canvas-draw routine skips the panel entirely
+// — only the chevron toggle stays visible.
+let _v2PanelCollapsed = (typeof localStorage !== 'undefined'
+                         && localStorage.getItem('tietiy_panel_collapsed') === '1');
+if (typeof document !== 'undefined' && _v2PanelCollapsed) {
+  document.body.classList.add('panel-collapsed');
+}
 
 // Fetch + draw the V2 plot items for the currently-loaded (symbol, date).
 async function _loadAndDrawV2() {
@@ -693,6 +701,10 @@ function _drawV2PlotItems() {
     if (xEnd === null)   xEnd = w;
 
     if (it.item_kind === 'decision_badge') {
+      // Phase 1.C Session 8 — operator can collapse the panel so it stops
+      // blocking the candles. Skip the entire draw block when collapsed;
+      // the HTML chevron button stays as the reopener affordance.
+      if (_v2PanelCollapsed) continue;
       // V3.5 — decision PANEL: bordered rectangle, top-LEFT, WITH DIRECTION.
       // Operator: "move it to other side of chart" + "add direction of stock,
       // explaining potential rr to which direction and trigger 1.98%."
@@ -2586,19 +2598,31 @@ document.querySelectorAll('.chart-toolbar .dd-menu').forEach(d => {
 (function initViewModePills() {
   const container = document.getElementById('view-mode-pills');
   if (!container) return;
-  // Reflect persisted state in the pills
-  for (const btn of container.querySelectorAll('.vm-pill')) {
+  // Reflect persisted state in the mode pills (exit pill has no data-mode)
+  for (const btn of container.querySelectorAll('.vm-pill[data-mode]')) {
     btn.classList.toggle('active', btn.dataset.mode === _v2ViewMode);
     btn.addEventListener('click', () => {
       _v2ViewMode = btn.dataset.mode;
       try { localStorage.setItem('tietiy_view_mode', _v2ViewMode); } catch {}
-      for (const b2 of container.querySelectorAll('.vm-pill')) {
+      for (const b2 of container.querySelectorAll('.vm-pill[data-mode]')) {
         b2.classList.toggle('active', b2.dataset.mode === _v2ViewMode);
       }
-      // Redraw the canvas overlay so the panel reflects the new mode.
       _scheduleOverlayRedraw();
     });
   }
+})();
+
+// Phase 1.C Session 8 — wire the decision-panel collapse chevron.
+(function initPanelCollapse() {
+  const btn = document.getElementById('btn-panel-collapse');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    _v2PanelCollapsed = !_v2PanelCollapsed;
+    document.body.classList.toggle('panel-collapsed', _v2PanelCollapsed);
+    try { localStorage.setItem('tietiy_panel_collapsed',
+                                _v2PanelCollapsed ? '1' : '0'); } catch {}
+    _scheduleOverlayRedraw();
+  });
 })();
 
 window.addEventListener('resize', () => {

@@ -540,31 +540,21 @@ body::before {
 }
 body.fullchart-mode .chart-fs-btn { display: none; }
 
-/* Exit-fullchart button — hidden by default; CSS makes it visible only
-   when the body is in fullchart-mode. Styled like .chart-fs-btn but with
-   a red accent so the affordance reads "leave" rather than "enter". */
-.chart-fs-exit {
+/* Exit-fullchart pill — lives inside .view-mode-pills now so it never
+   collides with the EXECUTION/ANALYSIS/HISTORY pills. Hidden by default;
+   shown only when body.fullchart-mode is on. */
+.vm-pill.vm-pill-exit {
   display: none;
-  position: absolute; top: 8px; right: 12px;
-  z-index: 7;
-  background: rgba(13, 17, 30, 0.92);
-  border: 1px solid var(--down);
-  color: var(--down);
-  font-family: var(--mono); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.6px;
-  padding: 6px 12px;
-  border-radius: 7px;
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: 0.15s;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 14px rgba(239, 68, 68, 0.20);
+  border-color: rgba(239, 68, 68, 0.70);
+  color: rgba(239, 68, 68, 1);
+  background: rgba(239, 68, 68, 0.08);
 }
-.chart-fs-exit:hover {
-  background: rgba(239, 68, 68, 0.15);
+.vm-pill.vm-pill-exit:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.95);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 22px rgba(239, 68, 68, 0.45);
 }
-body.fullchart-mode .chart-fs-exit { display: inline-block; }
+body.fullchart-mode .vm-pill.vm-pill-exit { display: inline-block; }
 /* Overlay canvas — created in JS, appended as sibling of #chart. Without this
    absolute positioning the canvas would flow as a block below the chart and
    no SR zones / trendlines / fibs would be visible. The rule was lost in the
@@ -1592,3 +1582,40 @@ body.fullchart-mode .chart-toolbar .present-hint { display: none; }
   border-color: rgba(245, 200, 90, 0.80);
   color: rgba(245, 200, 90, 1);
 }
+
+/* Swing slider moved into Layers dropdown — render full-width as a row */
+.impctl.impctl-in-dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.impctl.impctl-in-dd .impslider { flex: 1; min-width: 100px; }
+
+/* Decision-panel collapse button — chevron at top-left, above the canvas-
+   drawn panel. Click to hide / show the V2 decision panel so candles
+   behind it become readable. Rotates 180° in collapsed state. */
+.panel-collapse-btn {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 7;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 9, 15, 0.85);
+  border: 1px solid rgba(174, 182, 194, 0.30);
+  color: rgba(174, 182, 194, 0.85);
+  font: 700 12px "JetBrains Mono", monospace;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.panel-collapse-btn:hover {
+  border-color: rgba(245, 200, 90, 0.50);
+  color: rgba(245, 200, 90, 0.95);
+}
+body.panel-collapsed .panel-collapse-btn { transform: rotate(180deg); }

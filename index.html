@@ -59,10 +59,6 @@
   <!-- ╔══ CHART THEATER ═════════════════════════════════════════════════════╗ -->
   <section class="chart" id="chart-wrap">
     <a id="btn-fullchart-top" class="chart-fs-btn" href="#" target="_blank" rel="noopener" title="Open chart in new tab (full viewport)">⛶ Full</a>
-    <!-- Visible only in fullchart-mode (CSS-toggled). Removes ?fullchart=1
-         from the URL and reloads so the dock / hero / rail come back. -->
-    <button id="btn-exit-fullchart" class="chart-fs-exit"
-            title="Exit full-chart view" aria-label="Exit full-chart view">✕ Exit</button>
     <div id="chart"></div>
     <div id="trend-badge" class="trend-badge" style="display:none">
       <span class="tb-trend">—</span><span class="tb-days">— d</span>
@@ -71,10 +67,21 @@
     <div id="settling-zone-note" class="settling-note" style="display:none">
       last 10 bars: pivots not yet confirmable (lookback_n10)
     </div>
+    <!-- Decision-panel collapse toggle — small chevron overlaying the top-
+         LEFT corner. Click to hide / show the canvas-drawn decision panel
+         so the operator can see the candles behind it. State persists in
+         localStorage so reloads remember the last choice. -->
+    <button id="btn-panel-collapse" class="panel-collapse-btn"
+            title="Hide / show the decision panel">▾</button>
+
     <!-- Phase 1.C Session 8 — view-mode pills (Execution / Analysis / History).
          Sits in the top-right corner of the chart, above the decision panel.
-         Default mode is EXECUTION (matches what was shipping before). -->
+         Default mode is EXECUTION (matches what was shipping before).
+         Also hosts the exit-fullchart button so the two never collide
+         (previous layout had them both anchored top:8px right:12px). -->
     <div class="view-mode-pills" id="view-mode-pills">
+      <button id="btn-exit-fullchart" class="vm-pill vm-pill-exit"
+              title="Exit full-chart view">✕ EXIT</button>
       <button class="vm-pill active" data-mode="execution"
               title="Default chart — verb / bias / RR / trigger / 3 reasons">EXECUTION</button>
       <button class="vm-pill"        data-mode="analysis"
@@ -109,6 +116,15 @@
           <div class="dd-divider"></div>
           <div class="toggle"    id="t-zigzag-major"><span class="sw"></span><span class="lbl">Zigzag 5%</span></div>
           <div class="toggle"    id="t-zigzag-minor"><span class="sw"></span><span class="lbl">Zigzag 2%</span></div>
+          <div class="dd-divider"></div>
+          <!-- Swing slider moved into the Layers dropdown so the bottom-left
+               toolbar footprint shrinks to just "LAYERS ▾" — frees the volume
+               bars from being blocked. -->
+          <span class="impctl impctl-in-dd" title="display-only swing-size threshold">
+            <span class="impctl-label">swing ≥</span>
+            <input type="range" id="importance-min" min="0" max="100" step="1" value="10" class="impslider">
+            <span id="importance-value" class="impvalue">10</span>
+          </span>
         </div>
       </details>
       <details class="dd-menu" id="dd-producers">
@@ -117,11 +133,6 @@
           <div class="sp-dim">load a symbol to see producer output</div>
         </div>
       </details>
-      <span class="impctl" title="display-only swing-size threshold">
-        <span class="impctl-label">swing ≥</span>
-        <input type="range" id="importance-min" min="0" max="100" step="1" value="10" class="impslider">
-        <span id="importance-value" class="impvalue">10</span>
-      </span>
       <span class="present-hint" title="Press H to toggle present-mode"><kbd>H</kbd> present</span>
       <a id="btn-fullchart" class="ct-btn" href="#" target="_blank" rel="noopener" title="Open chart in new tab (full viewport)">⛶ Full</a>
     </div>
