@@ -687,13 +687,20 @@ function _drawV2PlotItems() {
     if (xEnd === null)   xEnd = w;
 
     if (it.item_kind === 'decision_badge') {
-      // V3.3 — decision PANEL moved to TOP-LEFT (operator: "put it in a short
-      // text on left side"). Compact format, anchored at x = 12.
-      //   Row 1  verb pill (STAND DOWN)
-      //   Row 2  Confidence NN% · Potential RR
-      //   Row 3  Trigger NNNN.NN · +Npts (+N.NN%)
-      //   Row 4  WHY header
-      //   Row 5-7  [TRIGGER] / [LEVEL] / [STRUCTURE] reason lines
+      // V3.4 — decision PANEL: small bordered rectangle, TOP-RIGHT.
+      // Operator: "put this on other side in a small rectangle text box type."
+      // One single rectangle, all text packed inside, fixed-width 260px.
+      //
+      //   ┌──────────────────────────────────┐
+      //   │ STAND DOWN                       │  ← verb in colored band
+      //   │ Conf 95% · Potential RR 2.91     │  ← stat line
+      //   │ Trigger 1340.60 · +26pts (+1.98%)│  ← trigger line (gold)
+      //   │ ─────────────────                │
+      //   │ WHY                              │
+      //   │ [TRIGGER]   Need close above 1341│
+      //   │ [LEVEL]     At active demand …   │
+      //   │ [STRUCTURE] Structure bearish    │
+      //   └──────────────────────────────────┘
       const panel = _v2PlotMeta?.decision_panel || {};
       const verb  = (it.label || 'WAIT').toUpperCase();
       let verbCol = '34, 197, 94';
@@ -702,99 +709,106 @@ function _drawV2PlotItems() {
       else if (verb === 'WAIT')    verbCol = '174, 182, 194';
       else if (verb === 'ARM')     verbCol = '92, 225, 230';
 
-      // LEFT-anchored layout. Width clamped at 300px (was 320px on the right).
-      const xL    = 12;
-      const padX  = 10;
-      const boxW  = 300;
-      let cursorY = 10;
-
-      // Verb pill (left-anchored)
-      overlayCtx.font = 'bold 14px "JetBrains Mono", monospace';
-      const verbW = overlayCtx.measureText(verb).width + 22;
-      overlayCtx.fillStyle = `rgba(${verbCol}, 0.96)`;
-      overlayCtx.fillRect(xL, cursorY, verbW, 24);
-      overlayCtx.fillStyle = '#07090f';
-      overlayCtx.textAlign = 'center';
-      overlayCtx.textBaseline = 'middle';
-      overlayCtx.fillText(verb, xL + verbW / 2, cursorY + 12);
-      cursorY += 30;
-
-      // Stat row: Confidence + Potential RR
+      // ── Build all text lines first so we can compute the box height ──
+      const lines = [];   // {text, color, font, weight}
+      lines.push({kind: 'verb',    text: verb, color: verbCol});
       const conf = panel.confidence;
       const rr   = panel.rr_preview;
       const stat = [];
-      if (typeof conf === 'number') stat.push(`Confidence ${conf}%`);
+      if (typeof conf === 'number') stat.push(`Conf ${conf}%`);
       if (typeof rr === 'number')   stat.push(`Potential RR ${rr}`);
-      if (stat.length) {
-        const text = stat.join('   ·   ');
-        overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
-        const tw = overlayCtx.measureText(text).width + padX * 2;
-        overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
-        overlayCtx.fillRect(xL, cursorY, tw, 19);
-        overlayCtx.strokeStyle = `rgba(${verbCol}, 0.5)`;
-        overlayCtx.lineWidth = 1;
-        overlayCtx.strokeRect(xL, cursorY, tw, 19);
-        overlayCtx.fillStyle = `rgba(${verbCol}, 0.95)`;
-        overlayCtx.textAlign = 'left';
-        overlayCtx.textBaseline = 'middle';
-        overlayCtx.fillText(text, xL + padX, cursorY + 10);
-        cursorY += 24;
-      }
-
-      // Trigger distance row
+      if (stat.length) lines.push({kind: 'stat', text: stat.join('  ·  '), color: verbCol});
       const trig = panel.trigger;
       if (trig && typeof trig.price === 'number') {
         const sign = trig.pts >= 0 ? '+' : '';
-        const text = `Trigger ${trig.price.toFixed(2)}  ·  ${sign}${trig.pts.toFixed(0)}pts (${sign}${trig.percent.toFixed(2)}%)`;
-        overlayCtx.font = 'bold 10.5px "JetBrains Mono", monospace';
-        const tw = overlayCtx.measureText(text).width + padX * 2;
-        overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
-        overlayCtx.fillRect(xL, cursorY, tw, 18);
-        overlayCtx.strokeStyle = 'rgba(245, 200, 90, 0.55)';
-        overlayCtx.lineWidth = 1;
-        overlayCtx.strokeRect(xL, cursorY, tw, 18);
-        overlayCtx.fillStyle = 'rgba(245, 200, 90, 0.95)';
-        overlayCtx.textAlign = 'left';
-        overlayCtx.textBaseline = 'middle';
-        overlayCtx.fillText(text, xL + padX, cursorY + 9);
-        cursorY += 22;
+        lines.push({kind: 'trig',
+                    text: `Trigger ${trig.price.toFixed(2)}  ·  ${sign}${trig.pts.toFixed(0)}pts (${sign}${trig.percent.toFixed(2)}%)`,
+                    color: '245, 200, 90'});
+      }
+      const reasons = (panel.reasons || []).slice(0, 3);
+      if (reasons.length) {
+        lines.push({kind: 'sep'});
+        lines.push({kind: 'hdr', text: 'WHY', color: '174, 182, 194'});
+        for (const r of reasons) {
+          const cat = (r.category || '').toUpperCase();
+          const txt = (r.text || '').trim();
+          lines.push({kind: 'reason', text: `${cat ? '['+cat+'] ' : ''}${txt}`, color: '230, 233, 240'});
+        }
       }
 
-      // Reasons (up to 3) — WHY header + lines, left-anchored
-      const reasons = panel.reasons || [];
-      if (reasons.length) {
-        overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
-        const hdr = 'WHY';
-        const hw  = overlayCtx.measureText(hdr).width + 10;
-        overlayCtx.fillStyle = 'rgba(174, 182, 194, 0.18)';
-        overlayCtx.fillRect(xL, cursorY, hw, 14);
-        overlayCtx.fillStyle = 'rgba(174, 182, 194, 0.95)';
-        overlayCtx.textAlign = 'center';
-        overlayCtx.textBaseline = 'middle';
-        overlayCtx.fillText(hdr, xL + hw / 2, cursorY + 7);
-        cursorY += 18;
+      const boxW       = 260;
+      const padX       = 10;
+      const padTop     = 8;
+      const padBottom  = 8;
+      const lineH      = 16;
+      const sepH       = 6;
+      const verbH      = 22;
+      let bodyH = padTop;
+      for (const ln of lines) {
+        if (ln.kind === 'sep')        bodyH += sepH;
+        else if (ln.kind === 'verb')  bodyH += verbH + 4;
+        else                          bodyH += lineH;
+      }
+      bodyH += padBottom;
 
-        overlayCtx.font = '11px "JetBrains Mono", monospace';
-        for (const r of reasons.slice(0, 3)) {
-          const cat = (r.category || '').toUpperCase();
-          const txt = (r.text || '').slice(0, 64);
-          const line = `${cat ? '['+cat+'] ' : ''}${txt}`;
-          let toRender = line;
-          if (overlayCtx.measureText(line).width > boxW - 24) {
-            while (overlayCtx.measureText(toRender + '…').width > boxW - 28) {
-              toRender = toRender.slice(0, -1);
-            }
-            toRender += '…';
-          }
-          const tw = overlayCtx.measureText(toRender).width + padX * 2;
-          overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
-          overlayCtx.fillRect(xL, cursorY, tw, 18);
-          overlayCtx.fillStyle = 'rgba(230, 233, 240, 0.92)';
+      const boxX = w - boxW - 12;
+      const boxY = 10;
+
+      // ── Box background + border ──
+      overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.92)';
+      overlayCtx.fillRect(boxX, boxY, boxW, bodyH);
+      overlayCtx.strokeStyle = `rgba(${verbCol}, 0.55)`;
+      overlayCtx.lineWidth = 1.2;
+      overlayCtx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, bodyH - 1);
+
+      // ── Render lines ──
+      let y = boxY + padTop;
+      for (const ln of lines) {
+        if (ln.kind === 'sep') {
+          overlayCtx.strokeStyle = 'rgba(174, 182, 194, 0.25)';
+          overlayCtx.lineWidth = 1;
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(boxX + padX, y + 3);
+          overlayCtx.lineTo(boxX + boxW - padX, y + 3);
+          overlayCtx.stroke();
+          y += sepH;
+          continue;
+        }
+        if (ln.kind === 'verb') {
+          // Verb gets its own colored band across the box top
+          overlayCtx.fillStyle = `rgba(${ln.color}, 0.96)`;
+          overlayCtx.fillRect(boxX + 1, y - 2, boxW - 2, verbH);
+          overlayCtx.fillStyle = '#07090f';
+          overlayCtx.font = 'bold 13px "JetBrains Mono", monospace';
+          overlayCtx.textAlign = 'center';
+          overlayCtx.textBaseline = 'middle';
+          overlayCtx.fillText(ln.text, boxX + boxW / 2, y + verbH / 2 - 2);
+          y += verbH + 4;
+          continue;
+        }
+        if (ln.kind === 'hdr') {
+          overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
+          overlayCtx.fillStyle = `rgba(${ln.color}, 0.85)`;
           overlayCtx.textAlign = 'left';
           overlayCtx.textBaseline = 'middle';
-          overlayCtx.fillText(toRender, xL + padX, cursorY + 9);
-          cursorY += 22;
+          overlayCtx.fillText(ln.text, boxX + padX, y + lineH / 2);
+          y += lineH;
+          continue;
         }
+        // stat / trig / reason — plain text line
+        const fontSize = (ln.kind === 'stat' || ln.kind === 'trig') ? 11 : 10.5;
+        const fontWeight = (ln.kind === 'stat' || ln.kind === 'trig') ? 'bold ' : '';
+        overlayCtx.font = `${fontWeight}${fontSize}px "JetBrains Mono", monospace`;
+        let toRender = ln.text;
+        while (overlayCtx.measureText(toRender).width > boxW - padX * 2 - 4) {
+          toRender = toRender.slice(0, -1);
+        }
+        if (toRender !== ln.text) toRender = toRender.slice(0, -1) + '…';
+        overlayCtx.fillStyle = `rgba(${ln.color}, 0.95)`;
+        overlayCtx.textAlign = 'left';
+        overlayCtx.textBaseline = 'middle';
+        overlayCtx.fillText(toRender, boxX + padX, y + lineH / 2);
+        y += lineH;
       }
       continue;
     }
