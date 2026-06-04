@@ -717,12 +717,14 @@ function _drawV2PlotItems() {
       overlayCtx.fillText(verb, w - verbW / 2 - 12, cursorY + 13);
       cursorY += 32;
 
-      // Confidence + RR row
+      // Confidence + Potential RR row
+      // V3.1 operator: "RR 2.91 is misleading because trade doesn't exist yet."
+      // → Show as "Potential RR" until a trade is live.
       const conf = panel.confidence;
       const rr   = panel.rr_preview;
       const stat = [];
       if (typeof conf === 'number') stat.push(`Confidence ${conf}%`);
-      if (typeof rr === 'number')   stat.push(`RR ${rr}`);
+      if (typeof rr === 'number')   stat.push(`Potential RR ${rr}`);
       if (stat.length) {
         const text = stat.join('   ·   ');
         overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
@@ -737,6 +739,25 @@ function _drawV2PlotItems() {
         overlayCtx.textBaseline = 'middle';
         overlayCtx.fillText(text, w - tw - 12 + padX, cursorY + 11);
         cursorY += 26;
+      }
+
+      // V3.1 — distance to trigger row (operator: "most important number on chart")
+      const trig = panel.trigger;
+      if (trig && typeof trig.price === 'number') {
+        const sign = trig.pts >= 0 ? '+' : '';
+        const text = `Trigger ${trig.price.toFixed(2)}  ·  ${sign}${trig.pts.toFixed(0)}pts (${sign}${trig.percent.toFixed(2)}%)`;
+        overlayCtx.font = 'bold 10.5px "JetBrains Mono", monospace';
+        const tw = overlayCtx.measureText(text).width + padX * 2;
+        overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
+        overlayCtx.fillRect(w - tw - 12, cursorY, tw, 18);
+        overlayCtx.strokeStyle = 'rgba(245, 200, 90, 0.55)';
+        overlayCtx.lineWidth = 1;
+        overlayCtx.strokeRect(w - tw - 12, cursorY, tw, 18);
+        overlayCtx.fillStyle = 'rgba(245, 200, 90, 0.95)';
+        overlayCtx.textAlign = 'left';
+        overlayCtx.textBaseline = 'middle';
+        overlayCtx.fillText(text, w - tw - 12 + padX, cursorY + 10);
+        cursorY += 22;
       }
 
       // Reason lines (up to 3)
@@ -809,19 +830,23 @@ function _drawV2PlotItems() {
       overlayCtx.textBaseline = 'middle';
       overlayCtx.fillText(label, xEnd - labelW + 2, labelY + 0.5);
 
-      // V3 — state badge ON THE LEFT EDGE of the band ("ACTIVE" / "WEAKENED" / "FRESH")
+      // V3.1 — state badge INSIDE the band (operator: "must belong to an
+      // object"), at the band's top-LEFT corner. Reads "ACTIVE DEMAND (12d)"
+      // / "WEAKENED SUPPLY (23d)" / "FRESH SUPPLY (3d)" etc.
       if (it.state_label) {
         overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
         const sw = overlayCtx.measureText(it.state_label).width + 10;
-        // Sit just above the band's top edge, anchored at xStart
-        const sx = xStart + 4;
-        const sy = yTop - 8;
-        overlayCtx.fillStyle = `rgba(${c.fill}, ${0.92})`;
-        overlayCtx.fillRect(sx, sy, sw, 14);
-        overlayCtx.fillStyle = '#07090f';
-        overlayCtx.textAlign = 'center';
-        overlayCtx.textBaseline = 'middle';
-        overlayCtx.fillText(it.state_label, sx + sw / 2, sy + 7);
+        const sx = xStart + 6;
+        const sy = yTop + 4;   // INSIDE the band, just below top edge
+        // Only render if there's vertical room (band > 16px tall)
+        if (yBot - yTop > 16) {
+          overlayCtx.fillStyle = `rgba(${c.fill}, ${0.92 * op})`;
+          overlayCtx.fillRect(sx, sy, sw, 14);
+          overlayCtx.fillStyle = '#07090f';
+          overlayCtx.textAlign = 'center';
+          overlayCtx.textBaseline = 'middle';
+          overlayCtx.fillText(it.state_label, sx + sw / 2, sy + 7);
+        }
       }
 
       if (it.sub_label) {
