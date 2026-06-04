@@ -757,14 +757,28 @@ function _drawV2PlotItems() {
       const label = it.label || `${it.price.toFixed(2)}`;
       overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
       const labelW = overlayCtx.measureText(label).width + 12;
+
+      // Label collision avoidance: if this line sits within 0.5 ATR of a
+      // band item's edge (e.g., trigger 1341 vs supply 1336-1341), the
+      // line's label would draw OVER the band's label at the right edge.
+      // In that case, draw the line label at the LEFT edge instead.
+      const atr = _v2PlotMeta?.atr14 || 1;
+      const collides = _v2PlotItems.some(other =>
+        other !== it && other.item_kind === 'band' &&
+        other.price_low !== null && other.price_high !== null &&
+        (Math.abs(it.price - other.price_high) / atr < 0.5 ||
+         Math.abs(it.price - other.price_low)  / atr < 0.5)
+      );
+      const labelX = collides ? (xStart + 4) : (xEnd - labelW - 4);
+
       overlayCtx.fillStyle = `rgba(7, 9, 15, ${0.93 * op})`;
-      overlayCtx.fillRect(xEnd - labelW - 4, y - 9, labelW, 18);
+      overlayCtx.fillRect(labelX, y - 9, labelW, 18);
       overlayCtx.strokeStyle = `rgba(${c.stroke}, ${op})`;
-      overlayCtx.strokeRect(xEnd - labelW - 4, y - 9, labelW, 18);
+      overlayCtx.strokeRect(labelX, y - 9, labelW, 18);
       overlayCtx.fillStyle = `rgba(${c.text}, ${op})`;
       overlayCtx.textAlign = 'left';
       overlayCtx.textBaseline = 'middle';
-      overlayCtx.fillText(label, xEnd - labelW + 2, y + 0.5);
+      overlayCtx.fillText(label, labelX + 6, y + 0.5);
       continue;
     }
   }
