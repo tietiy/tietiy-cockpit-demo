@@ -4248,6 +4248,20 @@ loadSymbol = async function (sym) {
 if ((new URLSearchParams(location.search)).get('fullchart') === '1') {
   document.body.classList.add('fullchart-mode');
 }
+
+// Exit-fullchart button — strip ?fullchart from the URL and reload so the
+// dock/hero/rail come back. Using history.replaceState + reload (instead of
+// just removing the class) ensures any layout-dependent listeners that ran
+// at fullchart-load time get re-initialized cleanly with the full layout.
+(function wireExitFullchart() {
+  const btn = document.getElementById('btn-exit-fullchart');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const u = new URL(location.href);
+    u.searchParams.delete('fullchart');
+    location.assign(u.toString());
+  });
+})();
 bindToggle('t-trendlines',
   () => { showTrendlines  = true;  applyImportanceFilterAndRender(); },
   () => { showTrendlines  = false; applyImportanceFilterAndRender(); });
