@@ -833,9 +833,15 @@ function _drawV2PlotItems() {
       // V3.1 — state badge INSIDE the band (operator: "must belong to an
       // object"), at the band's top-LEFT corner. Reads "ACTIVE DEMAND (12d)"
       // / "WEAKENED SUPPLY (23d)" / "FRESH SUPPLY (3d)" etc.
+      // V3.2 — append Object Strength: "ACTIVE DEMAND (58d) · 82"
+      // (decision_score 0-100; lets operator differentiate two same-state objects)
       if (it.state_label) {
+        const strength = (typeof it.decision_score === 'number')
+          ? Math.round(it.decision_score) : null;
+        const badge = strength !== null
+          ? `${it.state_label}  ·  ${strength}` : it.state_label;
         overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
-        const sw = overlayCtx.measureText(it.state_label).width + 10;
+        const sw = overlayCtx.measureText(badge).width + 10;
         const sx = xStart + 6;
         const sy = yTop + 4;   // INSIDE the band, just below top edge
         // Only render if there's vertical room (band > 16px tall)
@@ -845,7 +851,7 @@ function _drawV2PlotItems() {
           overlayCtx.fillStyle = '#07090f';
           overlayCtx.textAlign = 'center';
           overlayCtx.textBaseline = 'middle';
-          overlayCtx.fillText(it.state_label, sx + sw / 2, sy + 7);
+          overlayCtx.fillText(badge, sx + sw / 2, sy + 7);
         }
       }
 
