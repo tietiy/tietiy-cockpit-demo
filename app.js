@@ -175,8 +175,9 @@ async function _loadAndDrawV2() {
         last_close:    res.last_close,
         atr14:         res.atr14,
         trend_state:   res.trend_state,
+        pit_date:      res.date,                       // honest label for CHANGED ON
         decision_panel: res.decision_panel || null,    // V3
-        recent_events: res.recent_events || [],        // Phase 1.D §3 CHANGED TODAY
+        recent_events: res.recent_events || [],        // Phase 1.D §3
       };
       console.info(`[V2] ${currentSymbol} @ ${CURRENT_DATE}: ${res.n_raw_objects} raw → ${_v2PlotItems.length} chart items`);
     }
@@ -761,12 +762,18 @@ function _drawV2PlotItems() {
         }
       }
 
-      // Phase 1.D Session 3 — "CHANGED TODAY" surface for state-engine events.
-      // Hidden when there are no transitions today (cold day).
+      // Phase 1.D Session 3 — state-engine transition surface.
+      // Header is honest about WHICH date the transitions are from — PIT
+      // dates often lag today by 1 day because EOD data is published after
+      // close. Format: "CHANGED MM-DD" — month-day only since the full
+      // year is visible in the PIT-date selector at the top of the page.
       const recents = (_v2PlotMeta?.recent_events || []).slice(0, 4);
       if (recents.length) {
+        const pitDate = _v2PlotMeta?.pit_date || '';
+        const mmdd = pitDate.length >= 10 ? pitDate.slice(5) : '';  // "MM-DD"
+        const headerText = mmdd ? `CHANGED ${mmdd}` : 'CHANGED';
         lines.push({kind: 'sep'});
-        lines.push({kind: 'hdr', text: 'CHANGED TODAY', color: '174, 182, 194'});
+        lines.push({kind: 'hdr', text: headerText, color: '174, 182, 194'});
         // Severity → color so BROKEN reads red, CONFIRMED reads green, etc.
         const SEV_COLOR = {
           broken: '239, 68, 68', dead: '239, 68, 68', failed: '239, 68, 68',
