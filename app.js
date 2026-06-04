@@ -687,11 +687,13 @@ function _drawV2PlotItems() {
     if (xEnd === null)   xEnd = w;
 
     if (it.item_kind === 'decision_badge') {
-      // V3 — full decision PANEL top-right:
-      //   Row 1  verb pill (STAND DOWN, big)
-      //   Row 2  Confidence: NN%
-      //   Row 3  RR: 2.91
-      //   Row 4+ up to 3 reason lines
+      // V3.3 — decision PANEL moved to TOP-LEFT (operator: "put it in a short
+      // text on left side"). Compact format, anchored at x = 12.
+      //   Row 1  verb pill (STAND DOWN)
+      //   Row 2  Confidence NN% · Potential RR
+      //   Row 3  Trigger NNNN.NN · +Npts (+N.NN%)
+      //   Row 4  WHY header
+      //   Row 5-7  [TRIGGER] / [LEVEL] / [STRUCTURE] reason lines
       const panel = _v2PlotMeta?.decision_panel || {};
       const verb  = (it.label || 'WAIT').toUpperCase();
       let verbCol = '34, 197, 94';
@@ -700,26 +702,24 @@ function _drawV2PlotItems() {
       else if (verb === 'WAIT')    verbCol = '174, 182, 194';
       else if (verb === 'ARM')     verbCol = '92, 225, 230';
 
-      // Layout box right-aligned, ~280px wide, growing downward from y=10
-      const boxW   = 320;
-      const padX   = 12;
-      const boxX   = w - boxW - 12;
+      // LEFT-anchored layout. Width clamped at 300px (was 320px on the right).
+      const xL    = 12;
+      const padX  = 10;
+      const boxW  = 300;
       let cursorY = 10;
 
-      // Verb pill
+      // Verb pill (left-anchored)
       overlayCtx.font = 'bold 14px "JetBrains Mono", monospace';
       const verbW = overlayCtx.measureText(verb).width + 22;
       overlayCtx.fillStyle = `rgba(${verbCol}, 0.96)`;
-      overlayCtx.fillRect(w - verbW - 12, cursorY, verbW, 26);
+      overlayCtx.fillRect(xL, cursorY, verbW, 24);
       overlayCtx.fillStyle = '#07090f';
       overlayCtx.textAlign = 'center';
       overlayCtx.textBaseline = 'middle';
-      overlayCtx.fillText(verb, w - verbW / 2 - 12, cursorY + 13);
-      cursorY += 32;
+      overlayCtx.fillText(verb, xL + verbW / 2, cursorY + 12);
+      cursorY += 30;
 
-      // Confidence + Potential RR row
-      // V3.1 operator: "RR 2.91 is misleading because trade doesn't exist yet."
-      // → Show as "Potential RR" until a trade is live.
+      // Stat row: Confidence + Potential RR
       const conf = panel.confidence;
       const rr   = panel.rr_preview;
       const stat = [];
@@ -730,18 +730,18 @@ function _drawV2PlotItems() {
         overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
         const tw = overlayCtx.measureText(text).width + padX * 2;
         overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
-        overlayCtx.fillRect(w - tw - 12, cursorY, tw, 20);
+        overlayCtx.fillRect(xL, cursorY, tw, 19);
         overlayCtx.strokeStyle = `rgba(${verbCol}, 0.5)`;
         overlayCtx.lineWidth = 1;
-        overlayCtx.strokeRect(w - tw - 12, cursorY, tw, 20);
+        overlayCtx.strokeRect(xL, cursorY, tw, 19);
         overlayCtx.fillStyle = `rgba(${verbCol}, 0.95)`;
         overlayCtx.textAlign = 'left';
         overlayCtx.textBaseline = 'middle';
-        overlayCtx.fillText(text, w - tw - 12 + padX, cursorY + 11);
-        cursorY += 26;
+        overlayCtx.fillText(text, xL + padX, cursorY + 10);
+        cursorY += 24;
       }
 
-      // V3.1 — distance to trigger row (operator: "most important number on chart")
+      // Trigger distance row
       const trig = panel.trigger;
       if (trig && typeof trig.price === 'number') {
         const sign = trig.pts >= 0 ? '+' : '';
@@ -749,29 +749,29 @@ function _drawV2PlotItems() {
         overlayCtx.font = 'bold 10.5px "JetBrains Mono", monospace';
         const tw = overlayCtx.measureText(text).width + padX * 2;
         overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
-        overlayCtx.fillRect(w - tw - 12, cursorY, tw, 18);
+        overlayCtx.fillRect(xL, cursorY, tw, 18);
         overlayCtx.strokeStyle = 'rgba(245, 200, 90, 0.55)';
         overlayCtx.lineWidth = 1;
-        overlayCtx.strokeRect(w - tw - 12, cursorY, tw, 18);
+        overlayCtx.strokeRect(xL, cursorY, tw, 18);
         overlayCtx.fillStyle = 'rgba(245, 200, 90, 0.95)';
         overlayCtx.textAlign = 'left';
         overlayCtx.textBaseline = 'middle';
-        overlayCtx.fillText(text, w - tw - 12 + padX, cursorY + 10);
+        overlayCtx.fillText(text, xL + padX, cursorY + 9);
         cursorY += 22;
       }
 
-      // Reason lines (up to 3)
+      // Reasons (up to 3) — WHY header + lines, left-anchored
       const reasons = panel.reasons || [];
       if (reasons.length) {
         overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
         const hdr = 'WHY';
         const hw  = overlayCtx.measureText(hdr).width + 10;
         overlayCtx.fillStyle = 'rgba(174, 182, 194, 0.18)';
-        overlayCtx.fillRect(w - hw - 12, cursorY, hw, 14);
+        overlayCtx.fillRect(xL, cursorY, hw, 14);
         overlayCtx.fillStyle = 'rgba(174, 182, 194, 0.95)';
         overlayCtx.textAlign = 'center';
         overlayCtx.textBaseline = 'middle';
-        overlayCtx.fillText(hdr, w - hw / 2 - 12, cursorY + 7);
+        overlayCtx.fillText(hdr, xL + hw / 2, cursorY + 7);
         cursorY += 18;
 
         overlayCtx.font = '11px "JetBrains Mono", monospace';
@@ -779,22 +779,20 @@ function _drawV2PlotItems() {
           const cat = (r.category || '').toUpperCase();
           const txt = (r.text || '').slice(0, 64);
           const line = `${cat ? '['+cat+'] ' : ''}${txt}`;
-          // Wrap to two text lines if too long
           let toRender = line;
           if (overlayCtx.measureText(line).width > boxW - 24) {
-            // brute-force truncate
             while (overlayCtx.measureText(toRender + '…').width > boxW - 28) {
               toRender = toRender.slice(0, -1);
             }
             toRender += '…';
           }
-          const tw = Math.min(boxW, overlayCtx.measureText(toRender).width + padX * 2);
+          const tw = overlayCtx.measureText(toRender).width + padX * 2;
           overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
-          overlayCtx.fillRect(w - tw - 12, cursorY, tw, 18);
+          overlayCtx.fillRect(xL, cursorY, tw, 18);
           overlayCtx.fillStyle = 'rgba(230, 233, 240, 0.92)';
           overlayCtx.textAlign = 'left';
           overlayCtx.textBaseline = 'middle';
-          overlayCtx.fillText(toRender, w - tw - 12 + padX, cursorY + 9);
+          overlayCtx.fillText(toRender, xL + padX, cursorY + 9);
           cursorY += 22;
         }
       }
