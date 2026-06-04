@@ -1629,3 +1629,115 @@ body.fullchart-mode .chart-toolbar .present-hint { display: none; }
   color: rgba(245, 200, 90, 0.95);
 }
 body.panel-collapsed .panel-collapse-btn { transform: rotate(180deg); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Phase 1.C Session 8b — chart-controls strip
+   A unified toolbar between the main cmdbar and the chart. Two rectangles:
+   info-box on the left (symbol/price/trend snapshot), button-box on the right
+   (LAYERS dropdown, EXEC/ANALYSIS/HISTORY view modes, EXIT in fullchart-mode).
+   ════════════════════════════════════════════════════════════════════════════ */
+.chart-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  margin: 0 0 6px 0;
+}
+.cc-info {
+  flex: 0 1 auto;
+  min-width: 280px;
+  max-width: 520px;
+  padding: 7px 14px;
+  background: rgba(13, 17, 30, 0.85);
+  border: 1px solid rgba(174, 182, 194, 0.22);
+  border-radius: 7px;
+  font: 600 11px "JetBrains Mono", monospace;
+  letter-spacing: 0.3px;
+  color: rgba(174, 182, 194, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-info-empty { color: rgba(174, 182, 194, 0.45); }
+.cc-info .cci-sym  { color: rgba(245, 200, 90, 1); margin-right: 10px; }
+.cc-info .cci-px   { color: rgba(230, 233, 240, 1); margin-right: 4px; }
+.cc-info .cci-up   { color: rgba(34, 197, 94, 1); margin-right: 12px; }
+.cc-info .cci-dn   { color: rgba(239, 68, 68, 1); margin-right: 12px; }
+.cc-info .cci-meta { color: rgba(174, 182, 194, 0.65); }
+.cc-info .cci-bear { color: rgba(239, 68, 68, 1); }
+.cc-info .cci-bull { color: rgba(34, 197, 94, 1); }
+
+.cc-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(13, 17, 30, 0.85);
+  border: 1px solid rgba(174, 182, 194, 0.22);
+  border-radius: 7px;
+}
+
+/* Make the hoisted dropdowns + Full button match the cc-buttons pill style */
+.cc-buttons .dd-menu > summary {
+  background: transparent;
+  border: 1px solid rgba(174, 182, 194, 0.30);
+  border-radius: 3px;
+  color: rgba(174, 182, 194, 0.85);
+  font: 600 9.5px "JetBrains Mono", monospace;
+  letter-spacing: 0.5px;
+  padding: 4px 9px;
+  cursor: pointer;
+  list-style: none;
+}
+.cc-buttons .dd-menu > summary::-webkit-details-marker { display: none; }
+.cc-buttons .dd-menu > summary:hover {
+  border-color: rgba(245, 200, 90, 0.50);
+  color: rgba(245, 200, 90, 0.95);
+}
+.cc-buttons .dd-menu[open] > summary {
+  background: rgba(245, 200, 90, 0.15);
+  border-color: rgba(245, 200, 90, 0.80);
+  color: rgba(245, 200, 90, 1);
+}
+.cc-buttons .ct-btn {
+  background: transparent;
+  border: 1px solid rgba(174, 182, 194, 0.30);
+  border-radius: 3px;
+  color: rgba(174, 182, 194, 0.85);
+  font: 600 9.5px "JetBrains Mono", monospace;
+  letter-spacing: 0.5px;
+  padding: 4px 9px;
+  text-decoration: none;
+}
+.cc-buttons .ct-btn:hover {
+  border-color: rgba(245, 200, 90, 0.50);
+  color: rgba(245, 200, 90, 0.95);
+}
+
+/* Exit button — visible only in fullchart-mode. Lives in cc-buttons now. */
+.cc-exit-btn {
+  display: none;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239, 68, 68, 0.70);
+  color: rgba(239, 68, 68, 1);
+  font: 600 9.5px "JetBrains Mono", monospace;
+  letter-spacing: 0.5px;
+  padding: 4px 9px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.cc-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.95);
+  color: #fff;
+}
+body.fullchart-mode .cc-exit-btn { display: inline-block; }
+
+/* Hide the old bottom chart-toolbar — its content is hoisted to the top. */
+.chart-toolbar { display: none; }
+
+/* Position the dd-body dropdowns underneath their summaries when opened
+   from the new top strip (so they don't fly to the wrong place). The
+   existing absolute-positioning logic in app.js still applies. */

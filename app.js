@@ -2594,6 +2594,61 @@ document.querySelectorAll('.chart-toolbar .dd-menu').forEach(d => {
   });
 });
 // Re-position on window resize while open
+// Phase 1.C Session 8b — hoist the existing #dd-layers / #dd-producers /
+// #btn-fullchart out of the bottom .chart-toolbar into the new top
+// .cc-buttons strip. Done in JS rather than HTML so all the existing
+// event bindings on those IDs survive intact.
+(function hoistChartButtons() {
+  const dest = document.getElementById('cc-buttons');
+  if (!dest) return;
+  const insertBefore = document.getElementById('view-mode-pills');
+  for (const id of ['dd-layers', 'dd-producers', 'btn-fullchart']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    dest.insertBefore(el, insertBefore);
+  }
+})();
+
+// Phase 1.C Session 8b — populate the info-box at the top-left of the
+// chart-controls strip. Pulls symbol + last close + day change + ATR +
+// trend from globals updated by loadSymbol() and _v2PlotMeta.
+function _updateCcInfo() {
+  const box = document.getElementById('cc-info');
+  if (!box) return;
+  if (!currentSymbol || !_v2PlotMeta) {
+    box.innerHTML = '<span class="cc-info-empty">load a symbol</span>';
+    return;
+  }
+  const m = _v2PlotMeta;
+  const sym = currentSymbol.replace('.NS', '');
+  const last = (m.last_close || 0).toFixed(2);
+  // Day change from the second-to-last bar in currentBars
+  let chgHTML = '';
+  if (currentBars && currentBars.length >= 2) {
+    const prev = currentBars[currentBars.length - 2].close;
+    const curr = currentBars[currentBars.length - 1].close;
+    const d = curr - prev;
+    const pct = (prev > 0 ? (d / prev) * 100 : 0);
+    const cls = d >= 0 ? 'cci-up' : 'cci-dn';
+    const arrow = d >= 0 ? '▲' : '▼';
+    chgHTML = `<span class="${cls}">${arrow} ${Math.abs(pct).toFixed(2)}%</span>`;
+  }
+  const atr = m.atr14 ? `ATR ${m.atr14.toFixed(1)}` : '';
+  const trend = m.trend_state || '';
+  const trendCls = trend === 'BEAR' ? 'cci-bear' : (trend === 'BULL' ? 'cci-bull' : 'cci-meta');
+  box.innerHTML =
+    `<span class="cci-sym">${sym}</span>` +
+    `<span class="cci-px">${last}</span>` +
+    chgHTML +
+    `<span class="cci-meta">${atr}  </span>` +
+    `<span class="${trendCls}">${trend}</span>`;
+}
+// Update on a slow tick — cheap, doesn't risk breaking declared-function
+// reassignment in module strict mode. Also called explicitly on V2
+// fetch completion below.
+setInterval(_updateCcInfo, 300);
+_updateCcInfo();
+
 // Phase 1.C Session 8 — wire the view-mode pills.
 (function initViewModePills() {
   const container = document.getElementById('view-mode-pills');

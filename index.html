@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="vendor/lightweight-charts-4.1.3.standalone.production.js"></script>
-<link rel="stylesheet" href="style.css?v=4d40c6a">
+<link rel="stylesheet" href="style.css?v=97a9961">
 </head>
 <body>
 
@@ -34,16 +34,6 @@
       <span class="cmd-tab dim"  data-cmd="journal"   title="Phase 8 — coming">Journal</span>
     </nav>
     <div class="cmdbar-r">
-      <!-- View-mode pills live in the cmdbar (operator: "put everything in
-           the cmdbar, just the exit button at the chart corner"). -->
-      <div class="view-mode-pills" id="view-mode-pills">
-        <button class="vm-pill active" data-mode="execution"
-                title="Default chart — verb / bias / RR / trigger / 3 reasons">EXEC</button>
-        <button class="vm-pill"        data-mode="analysis"
-                title="Decision rule + confidence breakdown + conflict weights">ANALYSIS</button>
-        <button class="vm-pill"        data-mode="history"
-                title="Recent PIT dates' verbs + transition counts">HISTORY</button>
-      </div>
       <div class="idx-chip" id="idx-nifty50"   data-sym="NIFTY50">
         <span class="idx-k">NIFTY</span><span class="idx-v">—</span><span class="idx-d">—</span>
       </div>
@@ -66,6 +56,36 @@
   <!-- ╔══ STATE BANNER — descriptive verdict over chart ═════════════════════╗ -->
   <div class="banner" id="state-banner"><span class="bb-empty">—</span></div>
 
+  <!-- ╔══ CHART CONTROLS STRIP ═════════════════════════════════════════════╗
+       Operator: "make a cmdbar at top where exit and every button is — in a
+       rectangle box — and an info textbox in the middle connected to the
+       cmdbar, not square not so big not so small."
+       Two rectangles in one row: info-box on the left, button-box on the right. -->
+  <header class="chart-controls" id="chart-controls">
+    <div class="cc-info" id="cc-info">
+      <span class="cc-info-empty">—</span>
+    </div>
+    <div class="cc-buttons" id="cc-buttons">
+      <!-- LAYERS / Producers dropdowns + ⛶ Full button get hoisted here at
+           page-load by JS (so the existing event bindings on #dd-layers /
+           #dd-producers / #btn-fullchart stay intact). -->
+
+      <!-- View-mode pills — moved out of the cmdbar (operator: "put every
+           button in the [chart] rectangle"). -->
+      <div class="view-mode-pills" id="view-mode-pills">
+        <button class="vm-pill active" data-mode="execution"
+                title="Default chart — verb / bias / RR / trigger / 3 reasons">EXEC</button>
+        <button class="vm-pill"        data-mode="analysis"
+                title="Decision rule + confidence breakdown + conflict weights">ANALYSIS</button>
+        <button class="vm-pill"        data-mode="history"
+                title="Recent PIT dates' verbs + transition counts">HISTORY</button>
+      </div>
+      <!-- EXIT pill — visible only in fullchart-mode. -->
+      <button id="btn-exit-fullchart" class="cc-exit-btn"
+              title="Exit full-chart view">✕ EXIT</button>
+    </div>
+  </header>
+
   <!-- ╔══ CHART THEATER ═════════════════════════════════════════════════════╗ -->
   <section class="chart" id="chart-wrap">
     <a id="btn-fullchart-top" class="chart-fs-btn" href="#" target="_blank" rel="noopener" title="Open chart in new tab (full viewport)">⛶ Full</a>
@@ -84,11 +104,9 @@
     <button id="btn-panel-collapse" class="panel-collapse-btn"
             title="Hide / show the decision panel">▾</button>
 
-    <!-- Standalone exit-fullchart button at chart top-right corner. Visible
-         ONLY when body.fullchart-mode (CSS-toggled). View-mode pills moved
-         into the cmdbar above. -->
-    <button id="btn-exit-fullchart" class="chart-fs-exit"
-            title="Exit full-chart view">✕ EXIT</button>
+    <!-- (Exit button + view-mode pills moved into the chart-controls strip
+         above. LAYERS dropdown content also moved up — original dropdown
+         here kept for swing slider + Producers menu.) -->
 
     <!-- floating chart toolbar (layers + swing slider + present hint) -->
     <div class="chart-toolbar" id="chart-toolbar">
@@ -166,6 +184,6 @@
 
 </div>
 
-<script type="module" src="app.js?v=4d40c6a"></script>
+<script type="module" src="app.js?v=97a9961"></script>
 </body>
 </html>
