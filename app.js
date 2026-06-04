@@ -153,6 +153,9 @@ let _wyckoffToDraw = null;
 // Fetched per (symbol, date) from data/v2/plot_items/<date>/<sym>.json.
 let _v2PlotItems = null;
 let _v2PlotMeta = null;
+// Phase 1.C Session 8 — current view mode (Execution / Analysis / History).
+// Persists in localStorage so the operator's last choice survives reloads.
+let _v2ViewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('tietiy_view_mode')) || 'execution';
 
 // Fetch + draw the V2 plot items for the currently-loaded (symbol, date).
 async function _loadAndDrawV2() {
@@ -178,6 +181,7 @@ async function _loadAndDrawV2() {
         pit_date:      res.date,                       // honest label for CHANGED ON
         decision_panel: res.decision_panel || null,    // V3
         recent_events: res.recent_events || [],        // Phase 1.D §3
+        recent_history: res.recent_history || [],      // Phase 1.C §8 HISTORY mode
       };
       console.info(`[V2] ${currentSymbol} @ ${CURRENT_DATE}: ${res.n_raw_objects} raw → ${_v2PlotItems.length} chart items`);
     }
@@ -712,13 +716,16 @@ function _drawV2PlotItems() {
       else if (verb === 'WAIT')    verbCol = '174, 182, 194';
       else if (verb === 'ARM')     verbCol = '92, 225, 230';
 
-      // Direction derivation:
+      // Direction derivation. Phase 1.C: Decision Engine puts bias directly
+      // in the payload (panel.bias). If absent (legacy bake), fall back to
+      // deriving bias from trigger.pts sign so the UI still works.
       //   trigger.pts > 0  → conditional LONG (need upside reclaim)
       //   trigger.pts < 0  → conditional SHORT (need downside break)
-      // Combined with trend → label whether the trade is WITH or COUNTER trend.
       const trig = panel.trigger;
-      let bias = null, biasCol = '174, 182, 194', biasArrow = '', biasNote = '';
-      if (trig && typeof trig.pts === 'number') {
+      let bias = panel.bias || null, biasCol = '174, 182, 194', biasArrow = '', biasNote = '';
+      if (bias === 'LONG')  { biasArrow = '↑'; biasCol = '34, 197, 94';  }
+      else if (bias === 'SHORT') { biasArrow = '↓'; biasCol = '239, 68, 68'; }
+      else if (trig && typeof trig.pts === 'number') {
         if (trig.pts > 0) {
           bias = 'LONG'; biasArrow = '↑'; biasCol = '34, 197, 94';
         } else if (trig.pts < 0) {
@@ -751,14 +758,69 @@ function _drawV2PlotItems() {
                     text: `Trigger ${biasArrow} ${trig.price.toFixed(2)}  ·  ${sign}${trig.pts.toFixed(0)}pts (${sign}${trig.percent.toFixed(2)}%)`.trim(),
                     color: '245, 200, 90'});
       }
+      // Phase 1.C Session 8 — per-view-mode panel content.
+      // EXECUTION: WHY + 3 reasons + CHANGED panel (the default we've shipped).
+      // ANALYSIS:  + decision_rule + confidence_factors + conflict bull/bear.
+      // HISTORY:   replaces WHY with recent_history list of past PIT verbs.
+      const mode = _v2ViewMode || 'execution';
       const reasons = (panel.reasons || []).slice(0, 3);
-      if (reasons.length) {
+      if (mode !== 'history' && reasons.length) {
         lines.push({kind: 'sep'});
         lines.push({kind: 'hdr', text: 'WHY', color: '174, 182, 194'});
         for (const r of reasons) {
           const cat = (r.category || '').toUpperCase();
           const txt = (r.text || '').trim();
           lines.push({kind: 'reason', text: `${cat ? '['+cat+'] ' : ''}${txt}`, color: '230, 233, 240'});
+        }
+      }
+
+      // ANALYSIS mode — decision rule + confidence breakdown + conflict weights
+      if (mode === 'analysis') {
+        if (panel.decision_rule) {
+          lines.push({kind: 'sep'});
+          lines.push({kind: 'hdr', text: 'RULE', color: '174, 182, 194'});
+          lines.push({kind: 'reason',
+                      text: panel.decision_rule.slice(0, 60),
+                      color: '230, 233, 240'});
+        }
+        if (panel.confidence_factors && typeof panel.confidence_factors === 'object') {
+          lines.push({kind: 'hdr', text: 'CONFIDENCE', color: '174, 182, 194'});
+          for (const [k, v] of Object.entries(panel.confidence_factors)) {
+            lines.push({kind: 'reason',
+                        text: `${k.replace(/_/g, ' ')}: ${v}`,
+                        color: '230, 233, 240'});
+          }
+        }
+        if (panel.conflict_breakdown
+            && (panel.conflict_breakdown.bull_weight || panel.conflict_breakdown.bear_weight)) {
+          const cb = panel.conflict_breakdown;
+          lines.push({kind: 'hdr', text: 'CONFLICT', color: '174, 182, 194'});
+          lines.push({kind: 'reason',
+                      text: `bull ${Math.round(cb.bull_weight)} · bear ${Math.round(cb.bear_weight)} · score ${panel.conflict_score}%`,
+                      color: '230, 233, 240'});
+        }
+      }
+
+      // HISTORY mode — recent_history list of past PIT dates + verbs
+      if (mode === 'history') {
+        const hist = (_v2PlotMeta?.recent_history || []).slice(0, 5);
+        if (hist.length) {
+          lines.push({kind: 'sep'});
+          lines.push({kind: 'hdr', text: 'RECENT VERDICTS', color: '174, 182, 194'});
+          const VERB_COLOR = {
+            'STAND DOWN': '239, 68, 68',
+            'WATCH':      '245, 200, 90',
+            'WAIT':       '174, 182, 194',
+            'ARM':        '92, 225, 230',
+          };
+          for (const h of hist) {
+            const v = (h.verb || '—').toString();
+            const mm = (h.date && h.date.length >= 10) ? h.date.slice(5) : h.date;
+            const tx = h.transitions ? `  ${h.transitions} chg` : '';
+            lines.push({kind: 'reason',
+                        text: `${mm}  ${v}${tx}`,
+                        color: VERB_COLOR[v] || '230, 233, 240'});
+          }
         }
       }
 
@@ -2520,6 +2582,25 @@ document.querySelectorAll('.chart-toolbar .dd-menu').forEach(d => {
   });
 });
 // Re-position on window resize while open
+// Phase 1.C Session 8 — wire the view-mode pills.
+(function initViewModePills() {
+  const container = document.getElementById('view-mode-pills');
+  if (!container) return;
+  // Reflect persisted state in the pills
+  for (const btn of container.querySelectorAll('.vm-pill')) {
+    btn.classList.toggle('active', btn.dataset.mode === _v2ViewMode);
+    btn.addEventListener('click', () => {
+      _v2ViewMode = btn.dataset.mode;
+      try { localStorage.setItem('tietiy_view_mode', _v2ViewMode); } catch {}
+      for (const b2 of container.querySelectorAll('.vm-pill')) {
+        b2.classList.toggle('active', b2.dataset.mode === _v2ViewMode);
+      }
+      // Redraw the canvas overlay so the panel reflects the new mode.
+      _scheduleOverlayRedraw();
+    });
+  }
+})();
+
 window.addEventListener('resize', () => {
   document.querySelectorAll('.chart-toolbar .dd-menu[open]').forEach(_positionToolbarDropdown);
 });
