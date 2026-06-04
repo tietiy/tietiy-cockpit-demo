@@ -175,6 +175,7 @@ async function _loadAndDrawV2() {
         last_close:    res.last_close,
         atr14:         res.atr14,
         trend_state:   res.trend_state,
+        decision_panel: res.decision_panel || null,    // V3
       };
       console.info(`[V2] ${currentSymbol} @ ${CURRENT_DATE}: ${res.n_raw_objects} raw → ${_v2PlotItems.length} chart items`);
     }
@@ -686,23 +687,96 @@ function _drawV2PlotItems() {
     if (xEnd === null)   xEnd = w;
 
     if (it.item_kind === 'decision_badge') {
-      // Top-right corner pill — the decision verb (V2 §41 #8)
-      const verb = (it.label || 'WAIT').toUpperCase();
-      overlayCtx.font = 'bold 13px "JetBrains Mono", monospace';
-      const tw = overlayCtx.measureText(verb).width + 18;
-      const x0 = w - tw - 12;
-      // verb-class color
-      let verbCol = '34, 197, 94';        // bull/take = green default
-      if (verb === 'STAND DOWN')    verbCol = '239, 68, 68';
-      else if (verb === 'WATCH')    verbCol = '245, 200, 90';
-      else if (verb === 'WAIT')     verbCol = '174, 182, 194';
-      else if (verb === 'ARM')      verbCol = '92, 225, 230';
+      // V3 — full decision PANEL top-right:
+      //   Row 1  verb pill (STAND DOWN, big)
+      //   Row 2  Confidence: NN%
+      //   Row 3  RR: 2.91
+      //   Row 4+ up to 3 reason lines
+      const panel = _v2PlotMeta?.decision_panel || {};
+      const verb  = (it.label || 'WAIT').toUpperCase();
+      let verbCol = '34, 197, 94';
+      if (verb === 'STAND DOWN')   verbCol = '239, 68, 68';
+      else if (verb === 'WATCH')   verbCol = '245, 200, 90';
+      else if (verb === 'WAIT')    verbCol = '174, 182, 194';
+      else if (verb === 'ARM')     verbCol = '92, 225, 230';
+
+      // Layout box right-aligned, ~280px wide, growing downward from y=10
+      const boxW   = 320;
+      const padX   = 12;
+      const boxX   = w - boxW - 12;
+      let cursorY = 10;
+
+      // Verb pill
+      overlayCtx.font = 'bold 14px "JetBrains Mono", monospace';
+      const verbW = overlayCtx.measureText(verb).width + 22;
       overlayCtx.fillStyle = `rgba(${verbCol}, 0.96)`;
-      overlayCtx.fillRect(x0, 10, tw, 24);
+      overlayCtx.fillRect(w - verbW - 12, cursorY, verbW, 26);
       overlayCtx.fillStyle = '#07090f';
       overlayCtx.textAlign = 'center';
       overlayCtx.textBaseline = 'middle';
-      overlayCtx.fillText(verb, x0 + tw / 2, 22);
+      overlayCtx.fillText(verb, w - verbW / 2 - 12, cursorY + 13);
+      cursorY += 32;
+
+      // Confidence + RR row
+      const conf = panel.confidence;
+      const rr   = panel.rr_preview;
+      const stat = [];
+      if (typeof conf === 'number') stat.push(`Confidence ${conf}%`);
+      if (typeof rr === 'number')   stat.push(`RR ${rr}`);
+      if (stat.length) {
+        const text = stat.join('   ·   ');
+        overlayCtx.font = 'bold 11px "JetBrains Mono", monospace';
+        const tw = overlayCtx.measureText(text).width + padX * 2;
+        overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
+        overlayCtx.fillRect(w - tw - 12, cursorY, tw, 20);
+        overlayCtx.strokeStyle = `rgba(${verbCol}, 0.5)`;
+        overlayCtx.lineWidth = 1;
+        overlayCtx.strokeRect(w - tw - 12, cursorY, tw, 20);
+        overlayCtx.fillStyle = `rgba(${verbCol}, 0.95)`;
+        overlayCtx.textAlign = 'left';
+        overlayCtx.textBaseline = 'middle';
+        overlayCtx.fillText(text, w - tw - 12 + padX, cursorY + 11);
+        cursorY += 26;
+      }
+
+      // Reason lines (up to 3)
+      const reasons = panel.reasons || [];
+      if (reasons.length) {
+        overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
+        const hdr = 'WHY';
+        const hw  = overlayCtx.measureText(hdr).width + 10;
+        overlayCtx.fillStyle = 'rgba(174, 182, 194, 0.18)';
+        overlayCtx.fillRect(w - hw - 12, cursorY, hw, 14);
+        overlayCtx.fillStyle = 'rgba(174, 182, 194, 0.95)';
+        overlayCtx.textAlign = 'center';
+        overlayCtx.textBaseline = 'middle';
+        overlayCtx.fillText(hdr, w - hw / 2 - 12, cursorY + 7);
+        cursorY += 18;
+
+        overlayCtx.font = '11px "JetBrains Mono", monospace';
+        for (const r of reasons.slice(0, 3)) {
+          const cat = (r.category || '').toUpperCase();
+          const txt = (r.text || '').slice(0, 64);
+          const line = `${cat ? '['+cat+'] ' : ''}${txt}`;
+          // Wrap to two text lines if too long
+          let toRender = line;
+          if (overlayCtx.measureText(line).width > boxW - 24) {
+            // brute-force truncate
+            while (overlayCtx.measureText(toRender + '…').width > boxW - 28) {
+              toRender = toRender.slice(0, -1);
+            }
+            toRender += '…';
+          }
+          const tw = Math.min(boxW, overlayCtx.measureText(toRender).width + padX * 2);
+          overlayCtx.fillStyle = 'rgba(7, 9, 15, 0.85)';
+          overlayCtx.fillRect(w - tw - 12, cursorY, tw, 18);
+          overlayCtx.fillStyle = 'rgba(230, 233, 240, 0.92)';
+          overlayCtx.textAlign = 'left';
+          overlayCtx.textBaseline = 'middle';
+          overlayCtx.fillText(toRender, w - tw - 12 + padX, cursorY + 9);
+          cursorY += 22;
+        }
+      }
       continue;
     }
 
@@ -734,6 +808,21 @@ function _drawV2PlotItems() {
       overlayCtx.textAlign = 'left';
       overlayCtx.textBaseline = 'middle';
       overlayCtx.fillText(label, xEnd - labelW + 2, labelY + 0.5);
+
+      // V3 — state badge ON THE LEFT EDGE of the band ("ACTIVE" / "WEAKENED" / "FRESH")
+      if (it.state_label) {
+        overlayCtx.font = 'bold 9.5px "JetBrains Mono", monospace';
+        const sw = overlayCtx.measureText(it.state_label).width + 10;
+        // Sit just above the band's top edge, anchored at xStart
+        const sx = xStart + 4;
+        const sy = yTop - 8;
+        overlayCtx.fillStyle = `rgba(${c.fill}, ${0.92})`;
+        overlayCtx.fillRect(sx, sy, sw, 14);
+        overlayCtx.fillStyle = '#07090f';
+        overlayCtx.textAlign = 'center';
+        overlayCtx.textBaseline = 'middle';
+        overlayCtx.fillText(it.state_label, sx + sw / 2, sy + 7);
+      }
 
       if (it.sub_label) {
         overlayCtx.font = `10px "JetBrains Mono", monospace`;
