@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="vendor/lightweight-charts-4.1.3.standalone.production.js"></script>
-<link rel="stylesheet" href="style.css?v=97a9961">
+<link rel="stylesheet" href="style.css?v=171e009">
 </head>
 <body>
 
@@ -56,38 +56,39 @@
   <!-- ╔══ STATE BANNER — descriptive verdict over chart ═════════════════════╗ -->
   <div class="banner" id="state-banner"><span class="bb-empty">—</span></div>
 
-  <!-- ╔══ CHART CONTROLS STRIP ═════════════════════════════════════════════╗
-       Operator: "make a cmdbar at top where exit and every button is — in a
-       rectangle box — and an info textbox in the middle connected to the
-       cmdbar, not square not so big not so small."
-       Two rectangles in one row: info-box on the left, button-box on the right. -->
-  <header class="chart-controls" id="chart-controls">
-    <div class="cc-info" id="cc-info">
-      <span class="cc-info-empty">—</span>
-    </div>
-    <div class="cc-buttons" id="cc-buttons">
-      <!-- LAYERS / Producers dropdowns + ⛶ Full button get hoisted here at
-           page-load by JS (so the existing event bindings on #dd-layers /
-           #dd-producers / #btn-fullchart stay intact). -->
-
-      <!-- View-mode pills — moved out of the cmdbar (operator: "put every
-           button in the [chart] rectangle"). -->
-      <div class="view-mode-pills" id="view-mode-pills">
-        <button class="vm-pill active" data-mode="execution"
-                title="Default chart — verb / bias / RR / trigger / 3 reasons">EXEC</button>
-        <button class="vm-pill"        data-mode="analysis"
-                title="Decision rule + confidence breakdown + conflict weights">ANALYSIS</button>
-        <button class="vm-pill"        data-mode="history"
-                title="Recent PIT dates' verbs + transition counts">HISTORY</button>
-      </div>
-      <!-- EXIT pill — visible only in fullchart-mode. -->
-      <button id="btn-exit-fullchart" class="cc-exit-btn"
-              title="Exit full-chart view">✕ EXIT</button>
-    </div>
-  </header>
-
   <!-- ╔══ CHART THEATER ═════════════════════════════════════════════════════╗ -->
   <section class="chart" id="chart-wrap">
+    <!-- Chart-controls strip lives INSIDE the chart section (overlay at top)
+         so dropdowns open downward INTO the chart, not below the viewport.
+         Operator: "info textbox in middle connected to cmdbar at a rectangle
+         box, and exit + every button in a rectangle, and STAND DOWN where
+         it was."
+         Two rectangles in one row: info-box (left, medium width) +
+         button-box (right, LAYERS / Producers / view-mode pills / EXIT). -->
+    <header class="chart-controls" id="chart-controls">
+      <div class="cc-info" id="cc-info">
+        <span class="cc-info-empty">—</span>
+      </div>
+      <div class="cc-buttons" id="cc-buttons">
+        <!-- LAYERS / Producers dropdowns + ⛶ Full button hoisted here at
+             page-load by JS (so event bindings on #dd-layers / #dd-producers
+             / #btn-fullchart stay intact). -->
+
+        <!-- View-mode pills — moved out of the cmdbar (operator: "put every
+             button in the rectangle"). -->
+        <div class="view-mode-pills" id="view-mode-pills">
+          <button class="vm-pill active" data-mode="execution"
+                  title="Default chart — verb / bias / RR / trigger / 3 reasons">EXEC</button>
+          <button class="vm-pill"        data-mode="analysis"
+                  title="Decision rule + confidence breakdown + conflict weights">ANALYSIS</button>
+          <button class="vm-pill"        data-mode="history"
+                  title="Recent PIT dates' verbs + transition counts">HISTORY</button>
+        </div>
+        <!-- EXIT pill — visible only in fullchart-mode. -->
+        <button id="btn-exit-fullchart" class="cc-exit-btn"
+                title="Exit full-chart view">✕ EXIT</button>
+      </div>
+    </header>
     <a id="btn-fullchart-top" class="chart-fs-btn" href="#" target="_blank" rel="noopener" title="Open chart in new tab (full viewport)">⛶ Full</a>
     <div id="chart"></div>
     <div id="trend-badge" class="trend-badge" style="display:none">
@@ -184,6 +185,6 @@
 
 </div>
 
-<script type="module" src="app.js?v=97a9961"></script>
+<script type="module" src="app.js?v=171e009"></script>
 </body>
 </html>

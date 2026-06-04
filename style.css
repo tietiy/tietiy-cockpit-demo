@@ -634,6 +634,16 @@ body.fullchart-mode .chart-fs-exit { display: inline-block; }
   z-index: 200;
 }
 
+/* Same fixed-position escape applied to the hoisted dropdowns in the
+   chart-controls strip — without this they get clipped by the chart's
+   overflow:hidden. The JS _positionToolbarDropdown() now also runs on
+   #cc-buttons dropdowns (see app.js Session 8b update). */
+.cc-buttons .dd-body {
+  position: fixed;
+  top: auto; right: auto;
+  z-index: 200;
+}
+
 .dd-menu summary {
   list-style: none;
   cursor: pointer;
@@ -1632,18 +1642,23 @@ body.panel-collapsed .panel-collapse-btn { transform: rotate(180deg); }
 
 /* ════════════════════════════════════════════════════════════════════════════
    Phase 1.C Session 8b — chart-controls strip
-   A unified toolbar between the main cmdbar and the chart. Two rectangles:
-   info-box on the left (symbol/price/trend snapshot), button-box on the right
-   (LAYERS dropdown, EXEC/ANALYSIS/HISTORY view modes, EXIT in fullchart-mode).
+   Absolute-positioned overlay at the TOP of #chart-wrap so dropdowns open
+   downward into the chart (instead of off-screen). Two rectangles inside:
+   info-box on the left, button-box on the right.
    ════════════════════════════════════════════════════════════════════════════ */
 .chart-controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 5;       /* above the LWC chart canvas, below the panel-collapse btn (z:7) */
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 12px;
-  margin: 0 0 6px 0;
+  pointer-events: none;   /* let candle clicks pass through the empty middle */
 }
+.chart-controls > * { pointer-events: auto; }
 .cc-info {
   flex: 0 1 auto;
   min-width: 280px;

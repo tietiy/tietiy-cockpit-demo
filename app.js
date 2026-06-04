@@ -2579,16 +2579,24 @@ function _positionToolbarDropdown(detailsEl) {
   if (!body) return;
   const summary = detailsEl.querySelector('summary');
   const rect = summary.getBoundingClientRect();
-  // Open UPWARD from the summary — there's space ABOVE (chart area).
-  // Below the toolbar is the dock cell which has limited room.
-  // Anchor the dropdown's BOTTOM edge 6px above the summary's TOP edge;
-  // the dropdown's own height makes it grow upward naturally.
-  body.style.left   = rect.left + 'px';
-  body.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
-  body.style.top    = 'auto';
+  // Direction depends on which strip the dropdown lives in.
+  // - .chart-toolbar at bottom → open UPWARD
+  // - .cc-buttons at top of chart → open DOWNWARD (Session 8b)
+  const inTop = detailsEl.closest('.cc-buttons') !== null;
+  // Right-align under the button so the dropdown doesn't go off-screen
+  body.style.left   = 'auto';
+  body.style.right  = (window.innerWidth - rect.right) + 'px';
+  if (inTop) {
+    body.style.top    = (rect.bottom + 6) + 'px';
+    body.style.bottom = 'auto';
+  } else {
+    body.style.top    = 'auto';
+    body.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+  }
 }
-// Toggle handler — re-positions every time a chart-toolbar dropdown opens.
-document.querySelectorAll('.chart-toolbar .dd-menu').forEach(d => {
+// Toggle handler — re-positions every time a chart-toolbar / cc-buttons
+// dropdown opens. Session 8b extended selector to include the top strip.
+document.querySelectorAll('.chart-toolbar .dd-menu, .cc-buttons .dd-menu').forEach(d => {
   d.addEventListener('toggle', () => {
     if (d.open) _positionToolbarDropdown(d);
   });
@@ -2681,7 +2689,7 @@ _updateCcInfo();
 })();
 
 window.addEventListener('resize', () => {
-  document.querySelectorAll('.chart-toolbar .dd-menu[open]').forEach(_positionToolbarDropdown);
+  document.querySelectorAll('.chart-toolbar .dd-menu[open], .cc-buttons .dd-menu[open]').forEach(_positionToolbarDropdown);
 });
 // ESC also closes them.
 document.addEventListener('keydown', (e) => {
