@@ -540,21 +540,32 @@ body::before {
 }
 body.fullchart-mode .chart-fs-btn { display: none; }
 
-/* Exit-fullchart pill — lives inside .view-mode-pills now so it never
-   collides with the EXECUTION/ANALYSIS/HISTORY pills. Hidden by default;
-   shown only when body.fullchart-mode is on. */
-.vm-pill.vm-pill-exit {
+/* Standalone exit-fullchart button at chart top-right corner. Hidden by
+   default; visible only when body.fullchart-mode. Replaces the previous
+   "exit pill inside view-mode-pills" approach now that the pills moved
+   into the cmdbar. */
+.chart-fs-exit {
   display: none;
-  border-color: rgba(239, 68, 68, 0.70);
-  color: rgba(239, 68, 68, 1);
-  background: rgba(239, 68, 68, 0.08);
+  position: absolute; top: 8px; right: 12px;
+  z-index: 8;
+  background: rgba(13, 17, 30, 0.92);
+  border: 1px solid var(--down);
+  color: var(--down);
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: 0.15s;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 14px rgba(239, 68, 68, 0.20);
 }
-.vm-pill.vm-pill-exit:hover {
+.chart-fs-exit:hover {
   background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.95);
   color: #fff;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 22px rgba(239, 68, 68, 0.45);
 }
-body.fullchart-mode .vm-pill.vm-pill-exit { display: inline-block; }
+body.fullchart-mode .chart-fs-exit { display: inline-block; }
 /* Overlay canvas — created in JS, appended as sibling of #chart. Without this
    absolute positioning the canvas would flow as a block below the chart and
    no SR zones / trendlines / fibs would be visible. The rule was lost in the
@@ -1552,15 +1563,14 @@ body.fullchart-mode .chart-toolbar .present-hint { display: none; }
 
 /* ════════════════════════════════════════════════════════════════════════════
    Phase 1.C Session 8 — view-mode pills (Execution / Analysis / History)
+   Live INSIDE .cmdbar-r as inline-flex (operator: "put everything in the
+   cmdbar, just the exit button at the chart corner").
    ════════════════════════════════════════════════════════════════════════════ */
 .view-mode-pills {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
+  display: inline-flex;
   gap: 4px;
-  z-index: 6;       /* above the decision-panel overlay canvas */
-  pointer-events: auto;
+  margin-right: 8px;
+  align-items: center;
 }
 .vm-pill {
   background: rgba(7, 9, 15, 0.85);

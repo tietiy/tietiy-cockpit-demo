@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="vendor/lightweight-charts-4.1.3.standalone.production.js"></script>
-<link rel="stylesheet" href="style.css?v=47da8ec">
+<link rel="stylesheet" href="style.css?v=4d40c6a">
 </head>
 <body>
 
@@ -34,6 +34,16 @@
       <span class="cmd-tab dim"  data-cmd="journal"   title="Phase 8 — coming">Journal</span>
     </nav>
     <div class="cmdbar-r">
+      <!-- View-mode pills live in the cmdbar (operator: "put everything in
+           the cmdbar, just the exit button at the chart corner"). -->
+      <div class="view-mode-pills" id="view-mode-pills">
+        <button class="vm-pill active" data-mode="execution"
+                title="Default chart — verb / bias / RR / trigger / 3 reasons">EXEC</button>
+        <button class="vm-pill"        data-mode="analysis"
+                title="Decision rule + confidence breakdown + conflict weights">ANALYSIS</button>
+        <button class="vm-pill"        data-mode="history"
+                title="Recent PIT dates' verbs + transition counts">HISTORY</button>
+      </div>
       <div class="idx-chip" id="idx-nifty50"   data-sym="NIFTY50">
         <span class="idx-k">NIFTY</span><span class="idx-v">—</span><span class="idx-d">—</span>
       </div>
@@ -74,21 +84,11 @@
     <button id="btn-panel-collapse" class="panel-collapse-btn"
             title="Hide / show the decision panel">▾</button>
 
-    <!-- Phase 1.C Session 8 — view-mode pills (Execution / Analysis / History).
-         Sits in the top-right corner of the chart, above the decision panel.
-         Default mode is EXECUTION (matches what was shipping before).
-         Also hosts the exit-fullchart button so the two never collide
-         (previous layout had them both anchored top:8px right:12px). -->
-    <div class="view-mode-pills" id="view-mode-pills">
-      <button id="btn-exit-fullchart" class="vm-pill vm-pill-exit"
-              title="Exit full-chart view">✕ EXIT</button>
-      <button class="vm-pill active" data-mode="execution"
-              title="Default chart — verb / bias / RR / trigger / 3 reasons">EXECUTION</button>
-      <button class="vm-pill"        data-mode="analysis"
-              title="Adds the decision rule + confidence breakdown + conflict bull/bear weights">ANALYSIS</button>
-      <button class="vm-pill"        data-mode="history"
-              title="Replaces WHY with recent PIT dates' verb + transition counts">HISTORY</button>
-    </div>
+    <!-- Standalone exit-fullchart button at chart top-right corner. Visible
+         ONLY when body.fullchart-mode (CSS-toggled). View-mode pills moved
+         into the cmdbar above. -->
+    <button id="btn-exit-fullchart" class="chart-fs-exit"
+            title="Exit full-chart view">✕ EXIT</button>
 
     <!-- floating chart toolbar (layers + swing slider + present hint) -->
     <div class="chart-toolbar" id="chart-toolbar">
@@ -166,6 +166,6 @@
 
 </div>
 
-<script type="module" src="app.js?v=47da8ec"></script>
+<script type="module" src="app.js?v=4d40c6a"></script>
 </body>
 </html>
